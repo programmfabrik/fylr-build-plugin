@@ -1,0 +1,31 @@
+plugin:
+  name: __PLUGIN_NAME__
+  version: "1"
+  l10n: l10n/__PLUGIN_NAME__.csv
+  webfrontend:
+    url: __PLUGIN_NAME__.js
+    css: __PLUGIN_NAME__.css
+  displayname:
+    de-DE: __PLUGIN_NAME__
+    en-US: __PLUGIN_NAME__
+
+base_url_prefix: "webfrontend"
+
+# One example API extension, served by fylr via the node exec service: the
+# program reads the request from stdin and writes the response to stdout.
+# For everything a plugin can offer — callbacks, base_config, system_rights,
+# custom_types, fas_config, custom_events — see the reference plugin:
+# https://github.com/programmfabrik/fylr-plugin-example
+extensions:
+  hello:
+    exec:
+      service: "node"
+      commands:
+        - prog: "node"
+          stdin:
+            type: "body"
+          stdout:
+            type: "body"
+          args:
+            - type: "value"
+              value: "%_exec.pluginDir%/server/extension/hello.js"

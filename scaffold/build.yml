@@ -1,0 +1,24 @@
+# Build configuration for fylr-build-plugin — the explicit build description.
+# Delivered files are listed here; "check" (runs with every build) warns when
+# a manifest reference is missing from the build folder.
+# All features: https://github.com/programmfabrik/fylr-build-plugin
+
+server:
+  install:
+    - server
+    - l10n
+
+webfrontend:
+  # CoffeeScript 1.x, compiled + concatenated in this order into
+  # plugin.webfrontend.url (webfrontend/__PLUGIN_NAME__.js)
+  coffee1:
+    - webfrontend/__PLUGIN_PASCAL__.coffee
+  install:
+    - webfrontend/__PLUGIN_NAME__.css
+
+# Once the plugin's loca gets a tab in the "fylr localization" Google Sheet,
+# configure it here and pull with "make loca":
+# loca:
+#   - csv: l10n/__PLUGIN_NAME__.csv
+#     sheet: <spreadsheet key>
+#     gid: "<tab gid>"
