@@ -76,6 +76,9 @@ func build(p *plugin, release string) error {
 	if err := buildWebfrontend(p); err != nil {
 		return err
 	}
+	if err := buildL10nJSON(p); err != nil {
+		return err
+	}
 	if err := buildGoModules(p, mods); err != nil {
 		return err
 	}
@@ -115,7 +118,8 @@ func copyTree(src, dst string, goDirs map[string]bool) error {
 			return nil
 		}
 		switch d.Name() {
-		case ".DS_Store", ".gitignore":
+		// ".git" as a FILE is a submodule pointer — never ship it
+		case ".DS_Store", ".gitignore", ".git", ".gitmodules":
 			return nil
 		}
 		rel, err := filepath.Rel(src, path)

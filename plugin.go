@@ -82,10 +82,18 @@ type buildConfig struct {
 		// Scss files compile to same-named .css files ("_*.scss"
 		// partials belong here only via @use, not listed).
 		Scss []string `yaml:"scss"`
+		// L10nJSON converts loca CSVs into the per-culture JSON files
+		// the webfrontend loads (easydb-library l10n2json format).
+		L10nJSON []l10nJSON `yaml:"l10n_json"`
 		// Install lists webfrontend files delivered as-is: plain css,
 		// html, images, fonts, ...
 		Install []string `yaml:"install"`
 	} `yaml:"webfrontend"`
+}
+
+type l10nJSON struct {
+	CSV string `yaml:"csv"` // source loca CSV in the repo
+	Out string `yaml:"out"` // dir under base_url_prefix, default "l10n"
 }
 
 type locaSheet struct {

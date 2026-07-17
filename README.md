@@ -206,6 +206,9 @@ webfrontend:
     - webfrontend/UsesMyClass.coffee    # order into plugin.webfrontend.url
   scss:                  # compiled to same-named .css
     - webfrontend/MyStyle.scss
+  l10n_json:             # loca CSV -> per-culture JSONs the webfrontend
+    - csv: l10n/my-loca.csv       # loads (easydb-library l10n2json format),
+      out: l10n                   # written under base_url_prefix (default l10n)
   install:               # delivered as-is: plain css, html, images, fonts
     - webfrontend/MyPlugin.html
     - webfrontend/MyPlugin.css
