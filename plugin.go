@@ -79,6 +79,12 @@ type buildConfig struct {
 		// plugin.webfrontend.url under base_url_prefix. The key carries
 		// the major version: the plugins are stuck on CoffeeScript 1.x.
 		Coffee1 []string `yaml:"coffee1"`
+		// JS files join the same bundle verbatim, after the compiled
+		// CoffeeScript and in this order — for vendored libraries that
+		// are not CoffeeScript. fylr loads only the one bundle named by
+		// plugin.webfrontend.url, so a library delivered next to it
+		// (webfrontend.install) would never be loaded.
+		JS []string `yaml:"js"`
 		// Scss files compile to same-named .css files ("_*.scss"
 		// partials belong here only via @use, not listed).
 		Scss []string `yaml:"scss"`

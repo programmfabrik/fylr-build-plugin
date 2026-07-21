@@ -155,12 +155,14 @@ func copyFile(src, dst string, mode os.FileMode) error {
 }
 
 // buildWebfrontend compiles the build.yml webfrontend sources: CoffeeScript
-// (in list order) into the manifest's bundle, SCSS into same-named CSS files.
-// Plain webfrontend artifacts ship via webfrontend.install.
+// and plain JS (in list order) into the manifest's bundle, SCSS into
+// same-named CSS files. Plain webfrontend artifacts ship via
+// webfrontend.install.
 func buildWebfrontend(p *plugin) error {
 	coffees := p.Config.Webfrontend.Coffee1
+	jsFiles := p.Config.Webfrontend.JS
 	scssFiles := p.Config.Webfrontend.Scss
-	if len(coffees) == 0 && len(scssFiles) == 0 {
+	if len(coffees) == 0 && len(jsFiles) == 0 && len(scssFiles) == 0 {
 		return nil
 	}
 	web, err := p.webPrefix()
@@ -172,21 +174,38 @@ func buildWebfrontend(p *plugin) error {
 	}
 	dst := filepath.Join(p.Dir(), web)
 
-	// CoffeeScript -> one bundle, named by the manifest
-	if len(coffees) > 0 {
+	// compiled CoffeeScript + verbatim JS -> one bundle, named by the manifest
+	if len(coffees) > 0 || len(jsFiles) > 0 {
 		if p.Manifest.Plugin.Webfrontend.URL == "" {
-			return fmt.Errorf("build.yml coffee1 lists %d files but manifest.yml plugin.webfrontend.url is empty", len(coffees))
+			return fmt.Errorf("build.yml lists %d webfrontend bundle source(s) but manifest.yml plugin.webfrontend.url is empty", len(coffees)+len(jsFiles))
 		}
-		if err := needTool("coffee", "npm install -g coffeescript@1.12.7"); err != nil {
-			return err
+		if len(coffees) > 0 {
+			if err := needTool("coffee", "npm install -g coffeescript@1.12.7"); err != nil {
+				return err
+			}
 		}
 		var bundle bytes.Buffer
+		appendPart := func(part []byte) {
+			// a source not ending in a newline must not glue itself to
+			// the next one
+			if bundle.Len() > 0 && !bytes.HasSuffix(bundle.Bytes(), []byte("\n")) {
+				bundle.WriteByte('\n')
+			}
+			bundle.Write(part)
+		}
 		for _, cf := range coffees {
 			out, err := runCmd("", "coffee", "-b", "-p", "--compile", cf)
 			if err != nil {
 				return fmt.Errorf("compiling %s: %w", cf, err)
 			}
-			bundle.Write(out)
+			appendPart(out)
+		}
+		for _, jf := range jsFiles {
+			out, err := os.ReadFile(jf)
+			if err != nil {
+				return fmt.Errorf("webfrontend js source: %w", err)
+			}
+			appendPart(out)
 		}
 		target := filepath.Join(dst, p.Manifest.Plugin.Webfrontend.URL)
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
@@ -195,7 +214,7 @@ func buildWebfrontend(p *plugin) error {
 		if err := os.WriteFile(target, bundle.Bytes(), 0o644); err != nil {
 			return err
 		}
-		fmt.Printf("coffee: %d file(s) -> %s\n", len(coffees), target)
+		fmt.Printf("bundle: %d coffee + %d js file(s) -> %s\n", len(coffees), len(jsFiles), target)
 	}
 
 	// SCSS -> same-named .css

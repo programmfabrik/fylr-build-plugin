@@ -1,0 +1,76 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+// A plugin whose whole webfrontend is vendored JS: no coffee is involved, and
+// the sources land in the manifest's bundle in list order. The first file ends
+// without a newline — the parts must not be glued together.
+func TestBuildWebfrontendJSOnly(t *testing.T) {
+	t.Chdir(t.TempDir())
+	write(t, "manifest.yml", `plugin:
+  name: js-plugin
+  webfrontend:
+    url: js-plugin.js
+base_url_prefix: webfrontend
+`)
+	write(t, "build.yml", `webfrontend:
+  js:
+    - webfrontend/lib/vendor.js
+    - webfrontend/JSPlugin.js
+`)
+	write(t, "webfrontend/lib/vendor.js", "var vendor = 1;")
+	write(t, "webfrontend/JSPlugin.js", "var plugin = vendor;\n")
+
+	p, err := loadPlugin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := buildWebfrontend(p); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(p.Dir(), "webfrontend", "js-plugin.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "var vendor = 1;\nvar plugin = vendor;\n"; string(got) != want {
+		t.Errorf("bundle = %q, want %q", got, want)
+	}
+}
+
+// The bundle has no file to be written to when the manifest names none.
+func TestBuildWebfrontendJSWithoutBundleURL(t *testing.T) {
+	t.Chdir(t.TempDir())
+	write(t, "manifest.yml", `plugin:
+  name: js-plugin
+  webfrontend:
+    css: js-plugin.css
+base_url_prefix: webfrontend
+`)
+	write(t, "build.yml", `webfrontend:
+  js:
+    - webfrontend/JSPlugin.js
+`)
+	write(t, "webfrontend/JSPlugin.js", "var plugin = 1;\n")
+
+	p, err := loadPlugin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := buildWebfrontend(p); err == nil {
+		t.Fatal("js sources without plugin.webfrontend.url did not fail")
+	}
+}
+
+func write(t *testing.T, name, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
