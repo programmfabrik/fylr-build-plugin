@@ -264,7 +264,10 @@ func buildGoModules(p *plugin, mods []goExe) error {
 			}
 			cmd := exec.Command("go", "build", "-trimpath", `-ldflags=-s -w`, "-o", absOut, ".")
 			cmd.Dir = m.Dir
-			cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS="+arch.GOOS, "GOARCH="+arch.GOARCH)
+			// GOWORK=off: a plugin's Go module is never a workspace member, but a
+			// go.work anywhere above the checkout claims it and fails the build
+			// with "not one of the workspace modules"
+			cmd.Env = append(os.Environ(), "CGO_ENABLED=0", "GOWORK=off", "GOOS="+arch.GOOS, "GOARCH="+arch.GOARCH)
 			if out, err := cmd.CombinedOutput(); err != nil {
 				return fmt.Errorf("go build %s (%s/%s): %w\n%s", m.Dir, arch.GOOS, arch.GOARCH, err, out)
 			}
