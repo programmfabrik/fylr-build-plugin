@@ -67,7 +67,7 @@ Run from the plugin repo root (where manifest.yml lives).
 Usage:
   fylr-build-plugin init     scaffold a new plugin into the current directory
   fylr-build-plugin build    assemble build/<name>/ — loadable by fylr from disk
-  fylr-build-plugin zip      build + self-contained README + release zip
+  fylr-build-plugin zip      build + release zip
   fylr-build-plugin seal     seal a plugin zip for the marketplace (public key only)
   fylr-build-plugin genkey   generate a seal recipient keypair
   fylr-build-plugin info     inspect a (sealed) plugin zip

@@ -17,7 +17,7 @@ func runZip(args []string) error {
 	release := fs.String("release", "", "release tag written to build-info.json")
 	fs.Usage = func() {
 		fmt.Fprint(os.Stderr, "Usage: fylr-build-plugin zip [flags]\n\n"+
-			"Build the plugin, add a self-contained README.md, and pack\n"+
+			"Build the plugin (including its self-contained README.md) and pack\n"+
 			"build/<plugin.name>/ into the release zip (top-level folder = plugin name,\n"+
 			"as fylr requires for URL installs).\n\nFlags:\n")
 		fs.PrintDefaults()
@@ -44,14 +44,8 @@ func zipName(p *plugin, flagOut string) string {
 }
 
 func zipPlugin(p *plugin, flagOut string) error {
-	// self-contained README ships next to the manifest (outside the seal for
-	// sealed plugins) so the marketplace can show it without the repo
-	if _, err := os.Stat("README.md"); err == nil {
-		if err := runReadme([]string{"--out", filepath.Join(p.Dir(), "README.md")}); err != nil {
-			return err
-		}
-	}
-
+	// the self-contained README next to the manifest (outside the seal for
+	// sealed plugins) is delivered by build
 	out := filepath.Join(buildDir, zipName(p, flagOut))
 	if err := writeZip(out, p.Dir(), p.Name()); err != nil {
 		return err

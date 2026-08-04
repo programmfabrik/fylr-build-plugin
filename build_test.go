@@ -65,10 +65,38 @@ base_url_prefix: webfrontend
 	}
 }
 
-// plugin.webfrontend.readme delivers the self-contained README into the
-// webfrontend dir, so the plugin manager's README tab (served via
-// /plugin/static/<name>/<readme>) works for the installed plugin (#80537).
-func TestBuildWebfrontendReadme(t *testing.T) {
+// The repo README.md ships self-contained next to manifest.yml — no manifest
+// key involved; fylr reads it there for the marketplace and the plugin
+// manager's README tab (#80537).
+func TestBuildReadme(t *testing.T) {
+	t.Chdir(t.TempDir())
+	write(t, "manifest.yml", `plugin:
+  name: readme-plugin
+`)
+	write(t, "README.md", "# readme-plugin\n")
+
+	p, err := loadPlugin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := buildReadme(p); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(p.Dir(), "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "# readme-plugin\n"; string(got) != want {
+		t.Errorf("readme = %q, want %q", got, want)
+	}
+	if _, err := os.Stat(filepath.Join(p.Dir(), "webfrontend", "README.md")); err == nil {
+		t.Error("no webfrontend copy expected without a legacy webfrontend.readme key")
+	}
+}
+
+// A legacy plugin.webfrontend.readme key additionally delivers a copy into the
+// webfrontend dir for pre-#80537 fylr frontends.
+func TestBuildReadmeLegacyWebfrontendKey(t *testing.T) {
 	t.Chdir(t.TempDir())
 	write(t, "manifest.yml", `plugin:
   name: readme-plugin
@@ -82,21 +110,26 @@ base_url_prefix: webfrontend
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := buildWebfrontendReadme(p); err != nil {
+	if err := buildReadme(p); err != nil {
 		t.Fatal(err)
 	}
-	got, err := os.ReadFile(filepath.Join(p.Dir(), "webfrontend", "README.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := "# readme-plugin\n"; string(got) != want {
-		t.Errorf("readme = %q, want %q", got, want)
+	for _, fn := range []string{
+		filepath.Join(p.Dir(), "README.md"),
+		filepath.Join(p.Dir(), "webfrontend", "README.md"),
+	} {
+		got, err := os.ReadFile(fn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "# readme-plugin\n"; string(got) != want {
+			t.Errorf("%s = %q, want %q", fn, got, want)
+		}
 	}
 }
 
-// A declared readme without the file is a broken manifest reference — fail,
-// don't ship a plugin whose README tab would 404.
-func TestBuildWebfrontendReadmeMissingFile(t *testing.T) {
+// A declared legacy readme key without the file is a broken manifest
+// reference — fail, don't ship a plugin whose README tab would 404.
+func TestBuildReadmeMissingFile(t *testing.T) {
 	t.Chdir(t.TempDir())
 	write(t, "manifest.yml", `plugin:
   name: readme-plugin
@@ -108,7 +141,7 @@ base_url_prefix: webfrontend
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := buildWebfrontendReadme(p); err == nil {
+	if err := buildReadme(p); err == nil {
 		t.Fatal("missing README.md did not fail")
 	}
 }

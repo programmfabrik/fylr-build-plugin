@@ -119,7 +119,7 @@ it, so an installed plugin is traceable to a commit and release.
 | --- | --- |
 | `init` | scaffold a new plugin into the current (fresh) directory |
 | `build` | assemble `build/<plugin.name>/` — loadable by fylr from disk |
-| `zip` | `build` + self-contained README + release zip |
+| `zip` | `build` + release zip |
 | `seal` | seal a plugin zip for the marketplace (public key only) |
 | `genkey` | generate a seal recipient keypair |
 | `info` | inspect a (sealed) plugin zip: name, sealed?, recipient |
@@ -279,19 +279,19 @@ Either variant becomes a *sealed* release by switching `make zip` to
 Writes a **self-contained** README: every *relative* image reference is inlined
 as a `data:` URI. This matters because most plugin repositories are private —
 once a README leaves the repo (into the plugin zip, then the marketplace) its
-relative asset paths are unreachable. `zip` bundles it automatically as
+relative asset paths are unreachable. `build` bundles it automatically as
 `build/<name>/README.md`.
 
-The README is delivered twice, for two different consumers:
+`build` delivers it as `build/<name>/README.md` — next to `manifest.yml`, the
+one place fylr reads a plugin's docs: the **marketplace** reads it out of the
+release zip via HTTP range requests, and (since #80537) the **plugin manager**
+shows it as the installed plugin's README tab. No manifest key is involved;
+shipping the file is enough.
 
-- `build/<name>/README.md` (next to `manifest.yml`, written by `zip`) — read
-  by the **marketplace** out of the release zip via HTTP range requests.
-- `build/<name>/<base_url_prefix>/<readme>` (written by `build` when the
-  manifest sets `plugin.webfrontend.readme`, conventionally `readme: README.md`)
-  — served as a plugin static file; this key is what makes the **plugin
-  manager** show a README tab for the installed plugin. Without the key the
-  tab silently disappears (`build` warns when a README.md exists but the key
-  is missing).
+A legacy `plugin.webfrontend.readme` key additionally delivers a copy into the
+webfrontend dir, where pre-#80537 fylr frontends fetch it as a plugin static
+file. Keep the key only while such fylr versions must still show the tab; new
+plugins should not declare it.
 
 ```
 fylr-build-plugin readme [flags]
