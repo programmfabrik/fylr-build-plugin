@@ -39,9 +39,10 @@ type manifest struct {
 		Name        string `yaml:"name"`
 		L10n        string `yaml:"l10n"`
 		Webfrontend struct {
-			URL  string `yaml:"url"`
-			CSS  string `yaml:"css"`
-			HTML string `yaml:"html"`
+			URL    string `yaml:"url"`
+			CSS    string `yaml:"css"`
+			HTML   string `yaml:"html"`
+			Readme string `yaml:"readme"`
 		} `yaml:"webfrontend"`
 	} `yaml:"plugin"`
 	BaseURLPrefix string `yaml:"base_url_prefix"`
@@ -182,7 +183,7 @@ func loadPlugin() (*plugin, error) {
 // by convention), or "" when the plugin has no webfrontend.
 func (p *plugin) webPrefix() (string, error) {
 	wf := p.Manifest.Plugin.Webfrontend
-	if wf.URL == "" && wf.CSS == "" && wf.HTML == "" {
+	if wf.URL == "" && wf.CSS == "" && wf.HTML == "" && wf.Readme == "" {
 		return "", nil
 	}
 	if p.BaseURLPrefixClean() == "" {

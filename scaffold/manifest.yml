@@ -5,6 +5,7 @@ plugin:
   webfrontend:
     url: __PLUGIN_NAME__.js
     css: __PLUGIN_NAME__.css
+    readme: README.md
   displayname:
     de-DE: __PLUGIN_NAME__
     en-US: __PLUGIN_NAME__

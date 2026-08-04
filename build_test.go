@@ -65,6 +65,54 @@ base_url_prefix: webfrontend
 	}
 }
 
+// plugin.webfrontend.readme delivers the self-contained README into the
+// webfrontend dir, so the plugin manager's README tab (served via
+// /plugin/static/<name>/<readme>) works for the installed plugin (#80537).
+func TestBuildWebfrontendReadme(t *testing.T) {
+	t.Chdir(t.TempDir())
+	write(t, "manifest.yml", `plugin:
+  name: readme-plugin
+  webfrontend:
+    readme: README.md
+base_url_prefix: webfrontend
+`)
+	write(t, "README.md", "# readme-plugin\n")
+
+	p, err := loadPlugin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := buildWebfrontendReadme(p); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(p.Dir(), "webfrontend", "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "# readme-plugin\n"; string(got) != want {
+		t.Errorf("readme = %q, want %q", got, want)
+	}
+}
+
+// A declared readme without the file is a broken manifest reference — fail,
+// don't ship a plugin whose README tab would 404.
+func TestBuildWebfrontendReadmeMissingFile(t *testing.T) {
+	t.Chdir(t.TempDir())
+	write(t, "manifest.yml", `plugin:
+  name: readme-plugin
+  webfrontend:
+    readme: README.md
+base_url_prefix: webfrontend
+`)
+	p, err := loadPlugin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := buildWebfrontendReadme(p); err == nil {
+		t.Fatal("missing README.md did not fail")
+	}
+}
+
 func write(t *testing.T, name, content string) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(name), 0o755); err != nil {

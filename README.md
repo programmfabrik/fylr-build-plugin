@@ -282,6 +282,17 @@ once a README leaves the repo (into the plugin zip, then the marketplace) its
 relative asset paths are unreachable. `zip` bundles it automatically as
 `build/<name>/README.md`.
 
+The README is delivered twice, for two different consumers:
+
+- `build/<name>/README.md` (next to `manifest.yml`, written by `zip`) — read
+  by the **marketplace** out of the release zip via HTTP range requests.
+- `build/<name>/<base_url_prefix>/<readme>` (written by `build` when the
+  manifest sets `plugin.webfrontend.readme`, conventionally `readme: README.md`)
+  — served as a plugin static file; this key is what makes the **plugin
+  manager** show a README tab for the installed plugin. Without the key the
+  tab silently disappears (`build` warns when a README.md exists but the key
+  is missing).
+
 ```
 fylr-build-plugin readme [flags]
   --in               input markdown file (default "README.md")

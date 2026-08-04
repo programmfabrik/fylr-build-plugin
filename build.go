@@ -76,6 +76,9 @@ func build(p *plugin, release string) error {
 	if err := buildWebfrontend(p); err != nil {
 		return err
 	}
+	if err := buildWebfrontendReadme(p); err != nil {
+		return err
+	}
 	if err := buildL10nJSON(p); err != nil {
 		return err
 	}
@@ -238,6 +241,34 @@ func buildWebfrontend(p *plugin) error {
 		fmt.Printf("sass: %d file(s) compiled\n", len(scssFiles))
 	}
 	return nil
+}
+
+// buildWebfrontendReadme delivers the self-contained README into the
+// webfrontend dir when the manifest declares plugin.webfrontend.readme — that
+// key is what makes the plugin manager show a README tab for the installed
+// plugin, served from /plugin/static/<name>/<readme>, which resolves to
+// <base_url_prefix>/<readme> in the build tree. The marketplace copy next to
+// manifest.yml is separate and added by zip. (#80537)
+func buildWebfrontendReadme(p *plugin) error {
+	rd := p.Manifest.Plugin.Webfrontend.Readme
+	web, err := p.webPrefix()
+	if err != nil {
+		return err
+	}
+	if rd == "" {
+		// a webfrontend plugin with a README but no readme key silently loses
+		// the plugin manager's README tab — that is how geo-json lost its tab
+		if web != "" {
+			if _, err := os.Stat("README.md"); err == nil {
+				fmt.Fprintln(os.Stderr, "build: WARNING: README.md exists but manifest.yml has no plugin.webfrontend.readme — the plugin manager will show no README tab")
+			}
+		}
+		return nil
+	}
+	if _, err := os.Stat("README.md"); err != nil {
+		return fmt.Errorf("manifest.yml sets plugin.webfrontend.readme but README.md not found in the repo root: %w", err)
+	}
+	return runReadme([]string{"--out", filepath.Join(p.Dir(), web, filepath.FromSlash(rd))})
 }
 
 // buildGoModules cross-compiles every Go module for the configured
