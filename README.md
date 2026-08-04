@@ -286,12 +286,8 @@ relative asset paths are unreachable. `build` bundles it automatically as
 one place fylr reads a plugin's docs: the **marketplace** reads it out of the
 release zip via HTTP range requests, and (since #80537) the **plugin manager**
 shows it as the installed plugin's README tab. No manifest key is involved;
-shipping the file is enough.
-
-A legacy `plugin.webfrontend.readme` key additionally delivers a copy into the
-webfrontend dir, where pre-#80537 fylr frontends fetch it as a plugin static
-file. Keep the key only while such fylr versions must still show the tab; new
-plugins should not declare it.
+shipping the file is enough. The retired `plugin.webfrontend.readme` key is
+rejected by `build` — remove it from old manifests.
 
 ```
 fylr-build-plugin readme [flags]

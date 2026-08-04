@@ -246,31 +246,16 @@ func buildWebfrontend(p *plugin) error {
 // buildReadme delivers the plugin's docs: the self-contained README.md lands
 // next to manifest.yml — the one place fylr reads it, for the marketplace and
 // (since #80537) for the plugin manager's README tab of the installed plugin.
-// No manifest key is involved; shipping the file is enough.
-//
-// A legacy plugin.webfrontend.readme key additionally delivers a copy into the
-// webfrontend dir, where pre-#80537 fylr frontends fetch it as a plugin static
-// file — keep the key only while such fylr versions must show the tab.
+// No manifest key is involved; shipping the file is enough. The retired
+// plugin.webfrontend.readme key is rejected so it cannot creep back in.
 func buildReadme(p *plugin) error {
-	rd := p.Manifest.Plugin.Webfrontend.Readme
+	if p.Manifest.Plugin.Webfrontend.Readme != "" {
+		return fmt.Errorf("manifest.yml sets plugin.webfrontend.readme — remove the key: the README.md next to manifest.yml is the plugin's docs, nothing reads the key anymore (#80537)")
+	}
 	if _, err := os.Stat("README.md"); err != nil {
-		if rd != "" {
-			return fmt.Errorf("manifest.yml sets plugin.webfrontend.readme but README.md not found in the repo root: %w", err)
-		}
 		return nil
 	}
-	if err := runReadme([]string{"--out", filepath.Join(p.Dir(), "README.md")}); err != nil {
-		return err
-	}
-	if rd == "" {
-		return nil
-	}
-	web, err := p.webPrefix()
-	if err != nil {
-		return err
-	}
-	return copyFile(filepath.Join(p.Dir(), "README.md"),
-		filepath.Join(p.Dir(), web, filepath.FromSlash(rd)), 0o644)
+	return runReadme([]string{"--out", filepath.Join(p.Dir(), "README.md")})
 }
 
 // buildGoModules cross-compiles every Go module for the configured

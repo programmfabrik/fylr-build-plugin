@@ -39,9 +39,12 @@ type manifest struct {
 		Name        string `yaml:"name"`
 		L10n        string `yaml:"l10n"`
 		Webfrontend struct {
-			URL    string `yaml:"url"`
-			CSS    string `yaml:"css"`
-			HTML   string `yaml:"html"`
+			URL  string `yaml:"url"`
+			CSS  string `yaml:"css"`
+			HTML string `yaml:"html"`
+			// Readme is retired (#80537): the README.md next to manifest.yml
+			// is the plugin's docs, no key involved. Parsed only so build can
+			// reject a manifest that still declares it.
 			Readme string `yaml:"readme"`
 		} `yaml:"webfrontend"`
 	} `yaml:"plugin"`
@@ -183,7 +186,7 @@ func loadPlugin() (*plugin, error) {
 // by convention), or "" when the plugin has no webfrontend.
 func (p *plugin) webPrefix() (string, error) {
 	wf := p.Manifest.Plugin.Webfrontend
-	if wf.URL == "" && wf.CSS == "" && wf.HTML == "" && wf.Readme == "" {
+	if wf.URL == "" && wf.CSS == "" && wf.HTML == "" {
 		return "", nil
 	}
 	if p.BaseURLPrefixClean() == "" {

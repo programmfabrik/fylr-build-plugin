@@ -59,10 +59,9 @@ func check(p *plugin) error {
 	}
 	wf := p.Manifest.Plugin.Webfrontend
 	for what, fn := range map[string]string{
-		"plugin.webfrontend.url":    wf.URL,
-		"plugin.webfrontend.css":    wf.CSS,
-		"plugin.webfrontend.html":   wf.HTML,
-		"plugin.webfrontend.readme": wf.Readme,
+		"plugin.webfrontend.url":  wf.URL,
+		"plugin.webfrontend.css":  wf.CSS,
+		"plugin.webfrontend.html": wf.HTML,
 	} {
 		if fn != "" {
 			need(web+"/"+fn, what)
