@@ -62,8 +62,8 @@ type manifest struct {
 type buildConfig struct {
 	// Loca sheets pulled by the loca command.
 	Loca []locaSheet `yaml:"loca"`
-	// Release describes what a release publishes beyond the zip itself.
-	Release struct {
+	// Build describes what the build produces beyond the plugin folder.
+	Build struct {
 		// ZipAliases are additional names the release zip is ALSO
 		// written under, byte-identical copies beside <repo>.zip.
 		//
@@ -81,7 +81,16 @@ type buildConfig struct {
 		// named its zip whatever it liked - lists its historical
 		// names here and keeps publishing them.
 		ZipAliases []string `yaml:"zip_aliases"`
-	} `yaml:"release"`
+		// Bundles are assembled outputs: each is one file concatenated
+		// from an ordered list of sources, every source handled by its
+		// extension. The webfrontend bundle named by the manifest is
+		// the common case and has its own shorthand under
+		// webfrontend.coffee1/js; a bundle is what you reach for when
+		// a plugin produces a SECOND assembled file, such as the
+		// server-side updater the custom-data-type plugins run
+		// through custom_types.<type>.update.exec.
+		Bundles []bundle `yaml:"bundles"`
+	} `yaml:"build"`
 	// Server describes the server-side delivery.
 	Server struct {
 		// Install lists the files/dirs copied verbatim into the plugin
@@ -124,6 +133,16 @@ type buildConfig struct {
 type l10nJSON struct {
 	CSV string `yaml:"csv"` // source loca CSV in the repo
 	Out string `yaml:"out"` // dir under base_url_prefix, default "l10n"
+}
+
+// bundle is one assembled output file.
+type bundle struct {
+	// Out is the file written, relative to the plugin build folder.
+	Out string `yaml:"out"`
+	// Sources are concatenated in this order. The extension decides
+	// the handling: .coffee is compiled (CoffeeScript 1.x), .scss is
+	// compiled, anything else is taken verbatim.
+	Sources []string `yaml:"sources"`
 }
 
 type locaSheet struct {

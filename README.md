@@ -254,6 +254,36 @@ loca:                    # Google Sheets masters for the loca command
     gid: "<tab gid>"
 ```
 
+### Bundles
+
+`webfrontend.coffee1`/`js` is shorthand for the one bundle nearly every plugin
+has: the file named by `plugin.webfrontend.url`. A plugin that assembles a
+**second** file declares it explicitly:
+
+```yaml
+build:
+  bundles:
+    - out: updater/DANTEUpdater.js       # anywhere in the plugin folder
+      sources:
+        - src/updater/DANTEUpdater.js    # .js     -> verbatim
+        - webfrontend/DANTEUtil.coffee   # .coffee -> compiled
+```
+
+Sources are concatenated **in the order written**, each handled by its
+extension (`.coffee` and `.scss` compiled, anything else verbatim), and two
+sources are never glued together — a source not ending in a newline gets one.
+
+Order being the author's matters: the shorthand always puts CoffeeScript before
+JS, but the custom-data-type updaters need a hand-written Node script *first*
+with the shared utility appended, and a plugin vendoring a library may need it
+either side of its own code.
+
+`out` is any path inside the plugin folder, so a bundle is not limited to
+JavaScript — it also covers concatenating several CSS files into the one the
+manifest declares, or appending a second CSV to an l10n file. Bundles run after
+`install`, so a bundle may overwrite a file that was copied in verbatim.
+
+
 ### Historical asset names
 
 A published asset name can never be retired, only added to. fylr updates a url

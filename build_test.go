@@ -152,7 +152,7 @@ func TestZipAliasValidation(t *testing.T) {
 	}
 	run := func(aliases ...string) error {
 		p := &plugin{}
-		p.Config.Release.ZipAliases = aliases
+		p.Config.Build.ZipAliases = aliases
 		return writeZipAliases(p, zipPath)
 	}
 
@@ -177,6 +177,66 @@ func TestZipAliasValidation(t *testing.T) {
 		}
 		if string(got) != "PK-not-really" {
 			t.Errorf("alias %s is not a copy of the zip", name)
+		}
+	}
+}
+
+// assemble concatenates in the caller's order and never glues two sources
+// together — the reason the updaters can put a hand-written .js first and the
+// compiled .coffee after it
+func TestAssembleOrderAndSeparation(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	// no trailing newline: the parts must not run into each other
+	first := write("first.js", "var a = 1;")
+	second := write("second.js", "var b = 2;\n")
+
+	got, err := assemble([]string{first, second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "var a = 1;\nvar b = 2;\n"; string(got) != want {
+		t.Errorf("assemble = %q, want %q", got, want)
+	}
+
+	// the reverse order is a different file, not a normalised one
+	rev, err := assemble([]string{second, first})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "var b = 2;\nvar a = 1;"; string(rev) != want {
+		t.Errorf("reversed assemble = %q, want %q", rev, want)
+	}
+}
+
+func TestBundleValidation(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "a.js")
+	if err := os.WriteFile(src, []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	run := func(bs ...bundle) error {
+		p := &plugin{}
+		p.Config.Build.Bundles = bs
+		return buildBundles(p)
+	}
+
+	for name, bs := range map[string][]bundle{
+		"no out":        {{Sources: []string{src}}},
+		"no sources":    {{Out: "updater/x.js"}},
+		"escapes":       {{Out: "../outside.js", Sources: []string{src}}},
+		"absolute":      {{Out: "/etc/x.js", Sources: []string{src}}},
+		"two write one": {{Out: "x.js", Sources: []string{src}}, {Out: "./x.js", Sources: []string{src}}},
+	} {
+		if err := run(bs...); err == nil {
+			t.Errorf("%s: expected an error, got none", name)
 		}
 	}
 }

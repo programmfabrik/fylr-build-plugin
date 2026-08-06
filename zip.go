@@ -126,11 +126,11 @@ func zipPlugin(p *plugin) error {
 }
 
 // writeZipAliases copies the release zip to every name in
-// release.zip_aliases, beside the zip itself. The release workflow attaches
+// build.zip_aliases, beside the zip itself. The release workflow attaches
 // build/*.zip, so the copies reach the release without the workflow knowing
 // they exist.
 func writeZipAliases(p *plugin, zipPath string) error {
-	aliases := p.Config.Release.ZipAliases
+	aliases := p.Config.Build.ZipAliases
 	if len(aliases) == 0 {
 		return nil
 	}
@@ -143,11 +143,11 @@ func writeZipAliases(p *plugin, zipPath string) error {
 	for _, a := range aliases {
 		switch {
 		case a != filepath.Base(a):
-			return fmt.Errorf("release.zip_aliases: %q must be a bare file name, not a path", a)
+			return fmt.Errorf("build.zip_aliases: %q must be a bare file name, not a path", a)
 		case !strings.HasSuffix(a, ".zip"):
-			return fmt.Errorf("release.zip_aliases: %q must end in .zip", a)
+			return fmt.Errorf("build.zip_aliases: %q must end in .zip", a)
 		case seen[a]:
-			return fmt.Errorf("release.zip_aliases: %q is listed twice, or is the zip's own name", a)
+			return fmt.Errorf("build.zip_aliases: %q is listed twice, or is the zip's own name", a)
 		}
 		seen[a] = true
 		aliasPath := filepath.Join(filepath.Dir(zipPath), a)

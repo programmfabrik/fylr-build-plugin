@@ -76,6 +76,11 @@ func build(p *plugin, release string) error {
 	if err := buildWebfrontend(p); err != nil {
 		return err
 	}
+	// after install, so a bundle may overwrite a file that was copied in
+	// verbatim — geonames appends its country list to the l10n CSV that way
+	if err := buildBundles(p); err != nil {
+		return err
+	}
 	if err := buildReadme(p); err != nil {
 		return err
 	}
@@ -182,39 +187,17 @@ func buildWebfrontend(p *plugin) error {
 		if p.Manifest.Plugin.Webfrontend.URL == "" {
 			return fmt.Errorf("build.yml lists %d webfrontend bundle source(s) but manifest.yml plugin.webfrontend.url is empty", len(coffees)+len(jsFiles))
 		}
-		if len(coffees) > 0 {
-			if err := needTool("coffee", "npm install -g coffeescript@1.12.7"); err != nil {
-				return err
-			}
-		}
-		var bundle bytes.Buffer
-		appendPart := func(part []byte) {
-			// a source not ending in a newline must not glue itself to
-			// the next one
-			if bundle.Len() > 0 && !bytes.HasSuffix(bundle.Bytes(), []byte("\n")) {
-				bundle.WriteByte('\n')
-			}
-			bundle.Write(part)
-		}
-		for _, cf := range coffees {
-			out, err := runCmd("", "coffee", "-b", "-p", "--compile", cf)
-			if err != nil {
-				return fmt.Errorf("compiling %s: %w", cf, err)
-			}
-			appendPart(out)
-		}
-		for _, jf := range jsFiles {
-			out, err := os.ReadFile(jf)
-			if err != nil {
-				return fmt.Errorf("webfrontend js source: %w", err)
-			}
-			appendPart(out)
+		// coffee1 then js is the shorthand's fixed order; build.bundles
+		// takes the sources in the order they are written
+		content, err := assemble(append(append([]string{}, coffees...), jsFiles...))
+		if err != nil {
+			return err
 		}
 		target := filepath.Join(dst, p.Manifest.Plugin.Webfrontend.URL)
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(target, bundle.Bytes(), 0o644); err != nil {
+		if err := os.WriteFile(target, content, 0o644); err != nil {
 			return err
 		}
 		fmt.Printf("bundle: %d coffee + %d js file(s) -> %s\n", len(coffees), len(jsFiles), target)
@@ -239,6 +222,94 @@ func buildWebfrontend(p *plugin) error {
 			}
 		}
 		fmt.Printf("sass: %d file(s) compiled\n", len(scssFiles))
+	}
+	return nil
+}
+
+// assemble concatenates sources in the given order, each handled by its
+// extension: .coffee is compiled with CoffeeScript 1.x, .scss with sass,
+// anything else is taken verbatim. Order is the caller's, deliberately —
+// a vendored library may have to precede the code using it, or follow it.
+func assemble(sources []string) ([]byte, error) {
+	needs := func(ext string) bool {
+		for _, s := range sources {
+			if filepath.Ext(s) == ext {
+				return true
+			}
+		}
+		return false
+	}
+	if needs(".coffee") {
+		if err := needTool("coffee", "npm install -g coffeescript@1.12.7"); err != nil {
+			return nil, err
+		}
+	}
+	if needs(".scss") {
+		if err := needTool("sass", "npm install -g sass"); err != nil {
+			return nil, err
+		}
+	}
+
+	var out bytes.Buffer
+	for _, src := range sources {
+		var part []byte
+		var err error
+		switch filepath.Ext(src) {
+		case ".coffee":
+			part, err = runCmd("", "coffee", "-b", "-p", "--compile", src)
+		case ".scss":
+			part, err = runCmd("", "sass", "--no-source-map", "--stdin", src)
+		default:
+			part, err = os.ReadFile(src)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("bundle source %s: %w", src, err)
+		}
+		// a source not ending in a newline must not glue itself to the next
+		if out.Len() > 0 && !bytes.HasSuffix(out.Bytes(), []byte("\n")) {
+			out.WriteByte('\n')
+		}
+		out.Write(part)
+	}
+	return out.Bytes(), nil
+}
+
+// buildBundles writes every build.bundles entry: one assembled file each,
+// anywhere in the plugin folder. This is what lets a plugin produce a SECOND
+// assembled output beside the webfrontend bundle — the custom-data-type
+// plugins build a server-side updater that way, a hand-written Node script
+// with a compiled CoffeeScript utility appended.
+func buildBundles(p *plugin) error {
+	bundles := p.Config.Build.Bundles
+	if len(bundles) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	for _, b := range bundles {
+		switch {
+		case b.Out == "":
+			return fmt.Errorf("build.bundles: an entry has no out")
+		case len(b.Sources) == 0:
+			return fmt.Errorf("build.bundles: %q lists no sources", b.Out)
+		case filepath.IsAbs(b.Out) || strings.HasPrefix(filepath.Clean(b.Out), ".."):
+			return fmt.Errorf("build.bundles: out %q must be inside the plugin folder", b.Out)
+		case seen[filepath.Clean(b.Out)]:
+			return fmt.Errorf("build.bundles: %q is written by two entries", b.Out)
+		}
+		seen[filepath.Clean(b.Out)] = true
+
+		content, err := assemble(b.Sources)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(p.Dir(), b.Out)
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, content, 0o644); err != nil {
+			return err
+		}
+		fmt.Printf("bundle: %d source(s) -> %s\n", len(b.Sources), target)
 	}
 	return nil
 }
