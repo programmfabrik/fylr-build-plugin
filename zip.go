@@ -14,6 +14,10 @@ import (
 func runZip(args []string) error {
 	fs := flag.NewFlagSet("zip", flag.ContinueOnError)
 	release := fs.String("release", "", "release tag written to build-info.json")
+	// -out used to override the zip name. It is kept only so that a repo
+	// still passing ZIP_NAME fails with an explanation instead of the bare
+	// "flag provided but not defined".
+	out := fs.String("out", "", "")
 	fs.Usage = func() {
 		fmt.Fprint(os.Stderr, "Usage: fylr-build-plugin zip [flags]\n\n"+
 			"Build the plugin (including its self-contained README.md) and pack\n"+
@@ -23,6 +27,11 @@ func runZip(args []string) error {
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *out != "" {
+		return fmt.Errorf("the -out flag is gone: the release zip is always named after the plugin, <plugin.name>.zip.\n"+
+			"Drop ZIP_NAME from .github/workflows and the ZIP_FLAGS line from the Makefile, and attach build/*.zip in the release step.\n"+
+			"(this build would have written %q)", *out)
 	}
 	p, err := loadPlugin()
 	if err != nil {
