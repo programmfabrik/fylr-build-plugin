@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -21,15 +22,15 @@ func runZip(args []string) error {
 	fs.Usage = func() {
 		fmt.Fprint(os.Stderr, "Usage: fylr-build-plugin zip [flags]\n\n"+
 			"Build the plugin (including its self-contained README.md) and pack\n"+
-			"build/<plugin.name>/ into build/<plugin.name>.zip.\n\n"+
-			"The zip is ALWAYS named after the plugin — see zipName.\n\nFlags:\n")
+			"build/<plugin.name>/ into build/<repo>.zip.\n\n"+
+			"The zip is ALWAYS named after the repository — see zipName.\n\nFlags:\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *out != "" {
-		return fmt.Errorf("the -out flag is gone: the release zip is always named after the plugin, <plugin.name>.zip.\n"+
+		return fmt.Errorf("the -out flag is gone: the release zip is always named after the repository, <repo>.zip.\n"+
 			"Drop ZIP_NAME from .github/workflows and the ZIP_FLAGS line from the Makefile, and attach build/*.zip in the release step.\n"+
 			"(this build would have written %q)", *out)
 	}
@@ -44,25 +45,69 @@ func runZip(args []string) error {
 }
 
 // zipName is the one naming rule for fylr plugin releases: the zip is named
-// after the plugin's manifest name, "<plugin.name>.zip". It is deliberately
-// not configurable.
+// after the REPOSITORY, "<repo>.zip". There is no flag, no env var and no
+// per-repo exception.
 //
-// plugin.name is the identity fylr keys everything on — the plugin table, the
-// baseconfig scope "plugin.<name>", system rights, and the zip's mandatory
-// top-level folder — so naming the file after it makes the asset name a
-// consequence of the plugin rather than a per-repo decision that can drift.
-// Repository names are NOT used: they differ from the plugin name often
-// enough (fylr-plugin-scancode-display ships fylr-scancode-display) that a
-// repo-derived asset name would tell you the wrong thing about what you get.
+// The repository is what a release url already names, so an asset named after
+// it reads as one piece and can be written down without looking anything up:
 //
-// The practical payoff is that the marketplace catalog url,
-// releases/latest/download/<plugin.name>.zip, is derivable from the manifest
-// alone: nothing has to look up which asset a release happens to carry.
+//	https://github.com/programmfabrik/<repo>/releases/latest/download/<repo>.zip
 //
-// There used to be an -out flag; the shipped workflow templates overrode the
-// rule with the repo name, which is exactly the drift this prevents.
+// The manifest's plugin.name is deliberately NOT used. The two diverge often
+// enough (fylr-plugin-scancode-display ships the plugin fylr-scancode-display,
+// fylr-plugin-custom-data-type-k10plus ships custom-data-type-gvk) that a
+// manifest-derived asset would sit at a url that disagrees with itself, and
+// unlike the repository, plugin.name can be changed by an ordinary edit — the
+// asset url would then move without anyone touching the release process.
+//
+// This is also simply what most plugins already publish, so the rule is the
+// existing convention rather than a migration.
+//
+// Inside the zip, the top-level folder stays the plugin name: fylr requires
+// it, and it is unaffected by the name of the file it arrives in.
 func zipName(p *plugin) string {
-	return p.Name() + ".zip"
+	return repoName(p) + ".zip"
+}
+
+// repoName determines the repository the plugin is built from: the origin
+// remote if there is one (authoritative — it survives a locally renamed
+// checkout), otherwise the name of the directory holding the manifest.
+func repoName(p *plugin) string {
+	dir := p.Dir()
+	if dir == "" {
+		dir = "."
+	}
+	if url, err := gitOriginURL(dir); err == nil {
+		if n := repoFromURL(url); n != "" {
+			return n
+		}
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		abs = dir
+	}
+	return filepath.Base(abs)
+}
+
+func gitOriginURL(dir string) (string, error) {
+	cmd := exec.Command("git", "-C", dir, "remote", "get-url", "origin")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// repoFromURL takes the repository out of a remote url, in either form:
+// git@github.com:programmfabrik/fylr-plugin-x.git or
+// https://github.com/programmfabrik/fylr-plugin-x
+func repoFromURL(url string) string {
+	url = strings.TrimSuffix(strings.TrimSpace(url), "/")
+	url = strings.TrimSuffix(url, ".git")
+	if i := strings.LastIndexAny(url, "/:"); i >= 0 {
+		url = url[i+1:]
+	}
+	return url
 }
 
 func zipPlugin(p *plugin) error {

@@ -15,7 +15,7 @@ FYLR_BUILD_PLUGIN ?= go run github.com/programmfabrik/fylr-build-plugin@latest
 # The tool itself reads NO environment variables — everything is passed as
 # flags. The release workflow's RELEASE_TAG env is translated into a flag
 # right here. The zip's NAME is not passed: fylr-build-plugin always names it
-# <plugin.name>.zip, which is the naming rule for every fylr plugin release.
+# <repo>.zip, which is the naming rule for every fylr plugin release.
 RELEASE_FLAGS = $(if $(RELEASE_TAG),-release "$(RELEASE_TAG)")
 
 help:

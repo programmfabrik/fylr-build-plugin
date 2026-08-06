@@ -124,3 +124,20 @@ func write(t *testing.T, name, content string) {
 		t.Fatal(err)
 	}
 }
+
+// the naming rule: the release zip is named after the repository, in whatever
+// form the origin remote happens to have
+func TestRepoFromURL(t *testing.T) {
+	for _, tc := range []struct{ url, want string }{
+		{"git@github.com:programmfabrik/fylr-plugin-scancode-display.git", "fylr-plugin-scancode-display"},
+		{"https://github.com/programmfabrik/fylr-plugin-pdf-creator", "fylr-plugin-pdf-creator"},
+		{"https://github.com/programmfabrik/fylr-plugin-pdf-creator.git", "fylr-plugin-pdf-creator"},
+		{"https://github.com/programmfabrik/fylr-plugin-geo-json/", "fylr-plugin-geo-json"},
+		{"ssh://git@github.com/programmfabrik/fylr-plugin-orcid.git", "fylr-plugin-orcid"},
+		{"  git@github.com:programmfabrik/fylr-plugin-orcid.git\n", "fylr-plugin-orcid"},
+	} {
+		if got := repoFromURL(tc.url); got != tc.want {
+			t.Errorf("repoFromURL(%q) = %q, want %q", tc.url, got, tc.want)
+		}
+	}
+}

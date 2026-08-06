@@ -139,27 +139,30 @@ shim translates it into the `-release` flag.
 
 ### How the release zip is named
 
-The zip is **always** `build/<plugin.name>.zip`, taking the name from
-`manifest.yml`. This is a rule of the tool, not a per-repo choice: there is no
-flag and no env var to change it.
+The zip is **always** `build/<repo>.zip`, named after the repository. This is
+a rule of the tool, hard-wired: there is no flag, no env var and no per-repo
+exception.
 
-`plugin.name` is the identity fylr keys everything on — the `plugin` table,
-the baseconfig scope `plugin.<name>`, system rights, and the zip's mandatory
-top-level folder — so the asset name follows from the plugin instead of being
-decided again in every repo.
-
-The **repository** name is deliberately not used. It differs from the plugin
-name often enough (`fylr-plugin-scancode-display` ships the plugin
-`fylr-scancode-display`) that a repo-derived asset would misreport what is
-inside it. The payoff is that the marketplace url is derivable from the
-manifest alone:
+A release url then reads as one piece, and can be written down without looking
+anything up:
 
 ```
-https://github.com/programmfabrik/<repo>/releases/latest/download/<plugin.name>.zip
+https://github.com/programmfabrik/<repo>/releases/latest/download/<repo>.zip
 ```
 
-The shipped release workflows attach `build/*.zip`, so they never restate the
-rule.
+The manifest's `plugin.name` is deliberately **not** used. The two diverge
+often enough — `fylr-plugin-scancode-display` ships the plugin
+`fylr-scancode-display`, `fylr-plugin-custom-data-type-k10plus` ships
+`custom-data-type-gvk` — that a manifest-derived asset would sit at a url that
+disagrees with itself. `plugin.name` is also editable in a way the repository
+is not: renaming it would silently move the release asset.
+
+Inside the zip the top-level folder stays the **plugin** name, which fylr
+requires; it is unaffected by the name of the file it arrives in.
+
+The repository is taken from the `origin` remote, falling back to the
+directory name. The shipped release workflows attach `build/*.zip`, so they
+never restate the rule.
 
 ## What `build` does
 
