@@ -134,8 +134,32 @@ required when the plugin has CoffeeScript, `sass` only for SCSS, `go` only for
 Go server extensions.
 
 The tool reads **no environment variables** — every input is a flag. Where a
-release workflow has values in env (`RELEASE_TAG`, `ZIP_NAME`), the plugin's
-Makefile shim translates them into `-release`/`-out` flags.
+release workflow has a value in env (`RELEASE_TAG`), the plugin's Makefile
+shim translates it into the `-release` flag.
+
+### How the release zip is named
+
+The zip is **always** `build/<plugin.name>.zip`, taking the name from
+`manifest.yml`. This is a rule of the tool, not a per-repo choice: there is no
+flag and no env var to change it.
+
+`plugin.name` is the identity fylr keys everything on — the `plugin` table,
+the baseconfig scope `plugin.<name>`, system rights, and the zip's mandatory
+top-level folder — so the asset name follows from the plugin instead of being
+decided again in every repo.
+
+The **repository** name is deliberately not used. It differs from the plugin
+name often enough (`fylr-plugin-scancode-display` ships the plugin
+`fylr-scancode-display`) that a repo-derived asset would misreport what is
+inside it. The payoff is that the marketplace url is derivable from the
+manifest alone:
+
+```
+https://github.com/programmfabrik/<repo>/releases/latest/download/<plugin.name>.zip
+```
+
+The shipped release workflows attach `build/*.zip`, so they never restate the
+rule.
 
 ## What `build` does
 

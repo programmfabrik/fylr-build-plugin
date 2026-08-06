@@ -13,13 +13,12 @@ import (
 
 func runZip(args []string) error {
 	fs := flag.NewFlagSet("zip", flag.ContinueOnError)
-	out := fs.String("out", "", `zip filename, written into build/ (default "<plugin.name>.zip"; the release workflow passes <repo>.zip via the Makefile)`)
 	release := fs.String("release", "", "release tag written to build-info.json")
 	fs.Usage = func() {
 		fmt.Fprint(os.Stderr, "Usage: fylr-build-plugin zip [flags]\n\n"+
 			"Build the plugin (including its self-contained README.md) and pack\n"+
-			"build/<plugin.name>/ into the release zip (top-level folder = plugin name,\n"+
-			"as fylr requires for URL installs).\n\nFlags:\n")
+			"build/<plugin.name>/ into build/<plugin.name>.zip.\n\n"+
+			"The zip is ALWAYS named after the plugin — see zipName.\n\nFlags:\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -32,21 +31,35 @@ func runZip(args []string) error {
 	if err := build(p, *release); err != nil {
 		return err
 	}
-	return zipPlugin(p, *out)
+	return zipPlugin(p)
 }
 
-// zipName resolves the zip filename: the -out flag or <plugin.name>.zip.
-func zipName(p *plugin, flagOut string) string {
-	if flagOut != "" {
-		return flagOut
-	}
+// zipName is the one naming rule for fylr plugin releases: the zip is named
+// after the plugin's manifest name, "<plugin.name>.zip". It is deliberately
+// not configurable.
+//
+// plugin.name is the identity fylr keys everything on — the plugin table, the
+// baseconfig scope "plugin.<name>", system rights, and the zip's mandatory
+// top-level folder — so naming the file after it makes the asset name a
+// consequence of the plugin rather than a per-repo decision that can drift.
+// Repository names are NOT used: they differ from the plugin name often
+// enough (fylr-plugin-scancode-display ships fylr-scancode-display) that a
+// repo-derived asset name would tell you the wrong thing about what you get.
+//
+// The practical payoff is that the marketplace catalog url,
+// releases/latest/download/<plugin.name>.zip, is derivable from the manifest
+// alone: nothing has to look up which asset a release happens to carry.
+//
+// There used to be an -out flag; the shipped workflow templates overrode the
+// rule with the repo name, which is exactly the drift this prevents.
+func zipName(p *plugin) string {
 	return p.Name() + ".zip"
 }
 
-func zipPlugin(p *plugin, flagOut string) error {
+func zipPlugin(p *plugin) error {
 	// the self-contained README next to the manifest (outside the seal for
 	// sealed plugins) is delivered by build
-	out := filepath.Join(buildDir, zipName(p, flagOut))
+	out := filepath.Join(buildDir, zipName(p))
 	if err := writeZip(out, p.Dir(), p.Name()); err != nil {
 		return err
 	}
@@ -119,7 +132,7 @@ func writeZip(outPath, root, topDir string) error {
 
 // defaultZipPath is where "seal" expects the zip when -in is not given.
 func defaultZipPath(p *plugin) string {
-	return filepath.Join(buildDir, zipName(p, ""))
+	return filepath.Join(buildDir, zipName(p))
 }
 
 // sealedName derives the sealed artifact name from the plain zip name.

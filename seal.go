@@ -48,7 +48,7 @@ func runSeal(args []string) error {
 			if err := build(p, *release); err != nil {
 				return err
 			}
-			if err := zipPlugin(p, ""); err != nil {
+			if err := zipPlugin(p); err != nil {
 				return err
 			}
 		}
