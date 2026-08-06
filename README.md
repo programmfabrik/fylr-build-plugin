@@ -254,6 +254,28 @@ loca:                    # Google Sheets masters for the loca command
     gid: "<tab gid>"
 ```
 
+### Historical asset names
+
+A published asset name can never be retired, only added to. fylr updates a url
+plugin by re-fetching the url it **stored at install time** — not by re-reading
+the marketplace catalog — so an instance that installed while the zip had a
+different name holds that url forever. Dropping the name breaks its updates
+silently, and the instance has no way to discover the new one.
+
+Any repo whose asset name has changed — every plugin migrated here from a
+hand-written Makefile, which named its zip whatever it liked — lists its
+previous names and keeps publishing them:
+
+```yaml
+release:
+  zip_aliases:
+    - customDataTypeDante.zip
+```
+
+`zip` writes each alias as a byte-identical copy beside the real zip. The
+release workflows attach `build/*.zip`, so the copies reach the release without
+the workflow having to know they exist.
+
 ## Loca
 
 Plugin loca CSVs are mastered in Google Sheets (fylr's "fylr localization"

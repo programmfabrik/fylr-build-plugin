@@ -141,3 +141,42 @@ func TestRepoFromURL(t *testing.T) {
 		}
 	}
 }
+
+// release.zip_aliases keeps a retired asset name resolving; the rejections
+// matter because a bad alias is only noticed when a release publishes wrong
+func TestZipAliasValidation(t *testing.T) {
+	dir := t.TempDir()
+	zipPath := filepath.Join(dir, "fylr-plugin-x.zip")
+	if err := os.WriteFile(zipPath, []byte("PK-not-really"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run := func(aliases ...string) error {
+		p := &plugin{}
+		p.Config.Release.ZipAliases = aliases
+		return writeZipAliases(p, zipPath)
+	}
+
+	for _, bad := range [][]string{
+		{"sub/dir/Old.zip"},    // a path, not a name
+		{"OldName"},            // no .zip
+		{"Old.zip", "Old.zip"}, // listed twice
+		{"fylr-plugin-x.zip"},  // the zip's own name
+	} {
+		if err := run(bad...); err == nil {
+			t.Errorf("zip_aliases %v: expected an error, got none", bad)
+		}
+	}
+
+	if err := run("OldName.zip", "EvenOlder.zip"); err != nil {
+		t.Fatalf("valid aliases rejected: %v", err)
+	}
+	for _, name := range []string{"OldName.zip", "EvenOlder.zip"} {
+		got, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("alias %s not written: %v", name, err)
+		}
+		if string(got) != "PK-not-really" {
+			t.Errorf("alias %s is not a copy of the zip", name)
+		}
+	}
+}

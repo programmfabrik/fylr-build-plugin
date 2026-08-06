@@ -62,6 +62,26 @@ type manifest struct {
 type buildConfig struct {
 	// Loca sheets pulled by the loca command.
 	Loca []locaSheet `yaml:"loca"`
+	// Release describes what a release publishes beyond the zip itself.
+	Release struct {
+		// ZipAliases are additional names the release zip is ALSO
+		// written under, byte-identical copies beside <repo>.zip.
+		//
+		// This exists because a published asset name can never be
+		// retired, only added to: fylr updates a url plugin by
+		// re-fetching the url it stored at install time, not by
+		// re-reading the marketplace catalog. An instance that
+		// installed while the asset had a different name holds that
+		// url forever, so dropping the name breaks its updates
+		// silently, with no way for the instance to discover the new
+		// one.
+		//
+		// So a repo whose asset name has ever changed - every plugin
+		// migrated to this tool from a hand-written Makefile, which
+		// named its zip whatever it liked - lists its historical
+		// names here and keeps publishing them.
+		ZipAliases []string `yaml:"zip_aliases"`
+	} `yaml:"release"`
 	// Server describes the server-side delivery.
 	Server struct {
 		// Install lists the files/dirs copied verbatim into the plugin
