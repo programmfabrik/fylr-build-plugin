@@ -205,6 +205,18 @@ func TestAssembleOrderAndSeparation(t *testing.T) {
 		t.Errorf("assemble = %q, want %q", got, want)
 	}
 
+	// a source that already starts with a newline supplies its own
+	// separator — inserting another would add a blank line, which in a CSV
+	// is a row
+	leading := write("leading.csv", "\nb,2\n")
+	joined, err := assemble([]string{write("head.csv", "a,1"), leading})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "a,1\nb,2\n"; string(joined) != want {
+		t.Errorf("assemble with leading newline = %q, want %q", joined, want)
+	}
+
 	// the reverse order is a different file, not a normalised one
 	rev, err := assemble([]string{second, first})
 	if err != nil {

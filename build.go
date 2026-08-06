@@ -265,8 +265,13 @@ func assemble(sources []string) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("bundle source %s: %w", src, err)
 		}
-		// a source not ending in a newline must not glue itself to the next
-		if out.Len() > 0 && !bytes.HasSuffix(out.Bytes(), []byte("\n")) {
+		// two sources must not glue together, but they must not gain a
+		// blank line either: a file meant to be appended may already
+		// start with a newline (geonames' country list does), and in a
+		// CSV that blank line is a row
+		if out.Len() > 0 &&
+			!bytes.HasSuffix(out.Bytes(), []byte("\n")) &&
+			!bytes.HasPrefix(part, []byte("\n")) {
 			out.WriteByte('\n')
 		}
 		out.Write(part)
