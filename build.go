@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -103,6 +104,39 @@ func build(p *plugin, release string) error {
 // copyTree copies src (file or directory) to dst. Go module directories are
 // skipped (they are compiled, their sources do not ship), as are VCS/editor
 // droppings and node_modules.
+// emptyDirs lists the directories at or below root that hold no file at any
+// depth — root itself included.
+func emptyDirs(root string) ([]string, error) {
+	hasFile := map[string]bool{}
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			hasFile[path] = hasFile[path] || false
+			return nil
+		}
+		for p := filepath.Dir(path); ; p = filepath.Dir(p) {
+			hasFile[p] = true
+			if p == root || p == filepath.Dir(p) {
+				break
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for dir, ok := range hasFile {
+		if !ok {
+			out = append(out, dir)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
 func copyTree(src, dst string, goDirs map[string]bool) error {
 	info, err := os.Stat(src)
 	if err != nil {
@@ -110,6 +144,18 @@ func copyTree(src, dst string, goDirs map[string]bool) error {
 	}
 	if !info.IsDir() {
 		return copyFile(src, dst, info.Mode())
+	}
+	// An empty directory anywhere in an installed tree is almost always an
+	// uninitialised git submodule: the build succeeds, the zip is well
+	// formed, and the plugin ships without code it needs. actions/checkout
+	// does not fetch submodules unless asked, so this is a CI-only failure
+	// that never reaches a developer's machine.
+	if hollow, err := emptyDirs(src); err != nil {
+		return err
+	} else if len(hollow) > 0 {
+		return fmt.Errorf("install source %q contains empty director(ies) %v — if those are git "+
+			"submodules, the checkout did not fetch them (actions/checkout needs \"submodules: true\")",
+			src, hollow)
 	}
 	return filepath.WalkDir(src, func(path string, d os.DirEntry, err error) error {
 		if err != nil {

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -250,5 +251,34 @@ func TestBundleValidation(t *testing.T) {
 		if err := run(bs...); err == nil {
 			t.Errorf("%s: expected an error, got none", name)
 		}
+	}
+}
+
+// an empty directory inside an installed tree is an uninitialised submodule
+// in all but name: the build would otherwise succeed and ship without it
+func TestInstallRejectsEmptyDirs(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "server")
+	if err := os.MkdirAll(filepath.Join(src, "lib"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "main.py"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := copyTree(src, filepath.Join(root, "out"), nil)
+	if err == nil {
+		t.Fatal("expected an error for the empty lib/ directory, got none")
+	}
+	if !strings.Contains(err.Error(), "submodules") {
+		t.Errorf("error should point at the submodule cause, got: %v", err)
+	}
+
+	// with a file in it, the same tree copies fine
+	if err := os.WriteFile(filepath.Join(src, "lib", "util.py"), []byte("y\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyTree(src, filepath.Join(root, "out2"), nil); err != nil {
+		t.Fatalf("populated tree rejected: %v", err)
 	}
 }
