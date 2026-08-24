@@ -188,6 +188,13 @@ missing-module test callbacks).
   has to be part of it — delivered next to the bundle it would never be
   loaded.
 - `webfrontend.scss` files compile to same-named `.css`.
+- npm dependencies of the plugin's **node programs** are resolved into the
+  delivered files: every `%_exec.pluginDir%/….js` the manifest runs has its
+  `require`s followed and the reached modules inlined, node's builtins left
+  alone. Nothing configures this — declare the dependency in `package.json`,
+  commit `package-lock.json`, and the build runs `npm ci` when needed.
+  `node_modules` never ships, so this is what makes a dependency work at all;
+  a program that requires nothing is delivered byte-for-byte as written.
 - `server.go.modules` cross-compile for every configured arch (CGO off,
   trimmed, stripped) into their `exe` template — `%GOOS%`/`%GOARCH%` replaced,
   matching the manifest's `%_exec.GOOS%`/`%_exec.GOARCH%` references. Go
@@ -284,6 +291,25 @@ plugin vendoring a library may need it evaluated *before* its own code.
 JavaScript — it also covers concatenating several CSS files into the one the
 manifest declares, or appending a second CSV to an l10n file. Bundles run after
 `install`, so a bundle may overwrite a file that was copied in verbatim.
+
+### npm dependencies
+
+`node_modules` never ships. A `require("pg")` in a server program therefore has
+nothing to resolve against on the instance, which is why the build resolves it
+at build time: for every node program the manifest runs
+(`%_exec.pluginDir%/….js`), the requires are followed from that file and the
+reached modules are inlined into it, while node's builtins stay real requires.
+
+There is no key for this. Declare the dependency in `package.json` and commit
+`package-lock.json`; the build installs (`npm ci`) when `node_modules` is
+missing or older than the lockfile. It applies to assembled files too — an
+updater built by `server.bundles` is a node program like any other. A file
+whose module graph is only itself is left exactly as delivered.
+
+Native modules (node-gyp: `pg-native`, `sharp`) cannot be bundled and are
+host-specific — a plugin must not depend on them. An unresolvable require fails
+the build rather than shipping a program that dies on its first call.
+
 
 ### Historical asset names
 

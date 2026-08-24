@@ -82,6 +82,11 @@ func build(p *plugin, release string) error {
 	if err := buildBundles(p); err != nil {
 		return err
 	}
+	// after the bundles: an updater assembled above is a node program too,
+	// and its npm dependencies are resolved into the assembled file
+	if err := buildNodeDeps(p); err != nil {
+		return err
+	}
 	if err := buildReadme(p); err != nil {
 		return err
 	}

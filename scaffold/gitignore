@@ -1,4 +1,5 @@
 /build
 *.coffee.js
 webfrontend/__PLUGIN_NAME__.js
+node_modules/
 .DS_Store

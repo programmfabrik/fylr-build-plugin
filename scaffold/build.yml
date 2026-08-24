@@ -18,6 +18,10 @@ webfrontend:
   install:
     - webfrontend/__PLUGIN_NAME__.css
 
+# npm dependencies need no configuration: declare them in package.json, commit
+# package-lock.json, and the build resolves every require of a node program the
+# manifest runs into the delivered file (node_modules never ships).
+
 # Once the plugin's loca gets a tab in the "fylr localization" Google Sheet,
 # configure it here and pull with "make loca":
 # loca:
