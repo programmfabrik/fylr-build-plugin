@@ -31,8 +31,9 @@ func TestInitScaffold(t *testing.T) {
 	if p.Name() != "my-plugin" {
 		t.Errorf("plugin name = %q", p.Name())
 	}
-	if len(p.Config.Webfrontend.Coffee1) != 1 || !strings.Contains(p.Config.Webfrontend.Coffee1[0], "MyPlugin") {
-		t.Errorf("coffee1 = %v", p.Config.Webfrontend.Coffee1)
+	if len(p.Config.Webfrontend.Bundles) != 1 || len(p.Config.Webfrontend.Bundles[0].Sources) != 1 ||
+		!strings.Contains(p.Config.Webfrontend.Bundles[0].Sources[0], "MyPlugin") {
+		t.Errorf("webfrontend bundles = %+v", p.Config.Webfrontend.Bundles)
 	}
 	data, _ := os.ReadFile("manifest.yml")
 	if strings.Contains(string(data), "__PLUGIN") {

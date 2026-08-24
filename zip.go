@@ -130,7 +130,7 @@ func zipPlugin(p *plugin) error {
 // build/*.zip, so the copies reach the release without the workflow knowing
 // they exist.
 func writeZipAliases(p *plugin, zipPath string) error {
-	aliases := p.Config.Build.ZipAliases
+	aliases := p.Config.ZipAliases
 	if len(aliases) == 0 {
 		return nil
 	}

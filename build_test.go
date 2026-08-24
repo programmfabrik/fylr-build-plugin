@@ -19,9 +19,10 @@ func TestBuildWebfrontendJSOnly(t *testing.T) {
 base_url_prefix: webfrontend
 `)
 	write(t, "build.yml", `webfrontend:
-  js:
-    - webfrontend/lib/vendor.js
-    - webfrontend/JSPlugin.js
+  bundles:
+    - sources:
+        - webfrontend/lib/vendor.js
+        - webfrontend/JSPlugin.js
 `)
 	write(t, "webfrontend/lib/vendor.js", "var vendor = 1;")
 	write(t, "webfrontend/JSPlugin.js", "var plugin = vendor;\n")
@@ -30,7 +31,7 @@ base_url_prefix: webfrontend
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := buildWebfrontend(p); err != nil {
+	if err := buildBundles(p); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(filepath.Join(p.Dir(), "webfrontend", "js-plugin.js"))
@@ -42,7 +43,8 @@ base_url_prefix: webfrontend
 	}
 }
 
-// The bundle has no file to be written to when the manifest names none.
+// The bundle has no file to be written to when neither the entry nor the
+// manifest names one.
 func TestBuildWebfrontendJSWithoutBundleURL(t *testing.T) {
 	t.Chdir(t.TempDir())
 	write(t, "manifest.yml", `plugin:
@@ -52,8 +54,9 @@ func TestBuildWebfrontendJSWithoutBundleURL(t *testing.T) {
 base_url_prefix: webfrontend
 `)
 	write(t, "build.yml", `webfrontend:
-  js:
-    - webfrontend/JSPlugin.js
+  bundles:
+    - sources:
+        - webfrontend/JSPlugin.js
 `)
 	write(t, "webfrontend/JSPlugin.js", "var plugin = 1;\n")
 
@@ -61,8 +64,121 @@ base_url_prefix: webfrontend
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := buildWebfrontend(p); err == nil {
-		t.Fatal("js sources without plugin.webfrontend.url did not fail")
+	if err := buildBundles(p); err == nil {
+		t.Fatal("a bundle without out and without plugin.webfrontend.url did not fail")
+	}
+}
+
+// The two sides are not interchangeable: a server bundle is a program node
+// runs, a webfrontend bundle is browser code. An out on the wrong side of
+// base_url_prefix is a mistake, not a placement.
+func TestBundleSideMismatch(t *testing.T) {
+	t.Chdir(t.TempDir())
+	write(t, "manifest.yml", `plugin:
+  name: sides
+  webfrontend:
+    url: sides.js
+base_url_prefix: webfrontend
+`)
+	write(t, "build.yml", `server:
+  bundles:
+    - out: webfrontend/sides.js
+      sources: [src/a.js]
+`)
+	write(t, "src/a.js", "var a = 1;\n")
+
+	p, err := loadPlugin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.bundles(); err == nil {
+		t.Fatal("a server bundle writing into base_url_prefix did not fail")
+	}
+
+	write(t, "build.yml", `webfrontend:
+  bundles:
+    - out: server/extension/x.js
+      sources: [src/a.js]
+`)
+	p, err = loadPlugin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.bundles(); err == nil {
+		t.Fatal("a webfrontend bundle writing outside base_url_prefix did not fail")
+	}
+}
+
+// The retired layout keeps building for one release: build.bundles entries are
+// re-homed by their out, coffee1/js become one ordered bundle, and
+// build.zip_aliases moves to the top level (#80732).
+func TestLegacyBuildYAML(t *testing.T) {
+	t.Chdir(t.TempDir())
+	write(t, "manifest.yml", `plugin:
+  name: legacy
+  webfrontend:
+    url: legacy.js
+base_url_prefix: webfrontend
+`)
+	write(t, "build.yml", `webfrontend:
+  coffee1:
+    - webfrontend/Legacy.coffee
+  js:
+    - webfrontend/lib/vendor.js
+
+build:
+  bundles:
+    - out: updater/legacyUpdater.js
+      sources: [src/updater.js]
+    - out: webfrontend/extra.js
+      sources: [src/extra.js]
+  zip_aliases:
+    - legacy.zip
+`)
+
+	p, err := loadPlugin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := p.Config.ZipAliases, []string{"legacy.zip"}; len(got) != 1 || got[0] != want[0] {
+		t.Errorf("zip_aliases = %v, want %v", got, want)
+	}
+	bundles, err := p.bundles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"updater/legacyUpdater.js", "webfrontend/legacy.js", "webfrontend/extra.js"}
+	if len(bundles) != len(want) {
+		t.Fatalf("bundles = %d, want %d: %+v", len(bundles), len(want), bundles)
+	}
+	for i, b := range bundles {
+		if filepath.ToSlash(b.Out) != want[i] {
+			t.Errorf("bundles[%d].out = %q, want %q", i, b.Out, want[i])
+		}
+	}
+	// coffee before js, the order the retired shorthand always produced
+	if got := bundles[1].Sources; len(got) != 2 || got[0] != "webfrontend/Legacy.coffee" || got[1] != "webfrontend/lib/vendor.js" {
+		t.Errorf("webfrontend bundle sources = %v", got)
+	}
+}
+
+// Both spellings of the same thing is an error: merging them would depend on
+// an ordering nobody wrote down.
+func TestLegacyBuildYAMLConflict(t *testing.T) {
+	t.Chdir(t.TempDir())
+	write(t, "manifest.yml", `plugin:
+  name: legacy
+  webfrontend:
+    url: legacy.js
+base_url_prefix: webfrontend
+`)
+	write(t, "build.yml", `webfrontend:
+  coffee1: [webfrontend/Legacy.coffee]
+  bundles:
+    - sources: [webfrontend/Legacy.coffee]
+`)
+	if _, err := loadPlugin(); err == nil {
+		t.Fatal("coffee1 together with webfrontend.bundles did not fail")
 	}
 }
 
@@ -153,7 +269,7 @@ func TestZipAliasValidation(t *testing.T) {
 	}
 	run := func(aliases ...string) error {
 		p := &plugin{}
-		p.Config.Build.ZipAliases = aliases
+		p.Config.ZipAliases = aliases
 		return writeZipAliases(p, zipPath)
 	}
 
@@ -237,7 +353,7 @@ func TestBundleValidation(t *testing.T) {
 
 	run := func(bs ...bundle) error {
 		p := &plugin{}
-		p.Config.Build.Bundles = bs
+		p.Config.Server.Bundles = bs
 		return buildBundles(p)
 	}
 

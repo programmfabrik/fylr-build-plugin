@@ -62,40 +62,34 @@ type manifest struct {
 type buildConfig struct {
 	// Loca sheets pulled by the loca command.
 	Loca []locaSheet `yaml:"loca"`
-	// Build describes what the build produces beyond the plugin folder.
-	Build struct {
-		// ZipAliases are additional names the release zip is ALSO
-		// written under, byte-identical copies beside <repo>.zip.
-		//
-		// This exists because a published asset name can never be
-		// retired, only added to: fylr updates a url plugin by
-		// re-fetching the url it stored at install time, not by
-		// re-reading the marketplace catalog. An instance that
-		// installed while the asset had a different name holds that
-		// url forever, so dropping the name breaks its updates
-		// silently, with no way for the instance to discover the new
-		// one.
-		//
-		// So a repo whose asset name has ever changed - every plugin
-		// migrated to this tool from a hand-written Makefile, which
-		// named its zip whatever it liked - lists its historical
-		// names here and keeps publishing them.
-		ZipAliases []string `yaml:"zip_aliases"`
-		// Bundles are assembled outputs: each is one file concatenated
-		// from an ordered list of sources, every source handled by its
-		// extension. The webfrontend bundle named by the manifest is
-		// the common case and has its own shorthand under
-		// webfrontend.coffee1/js; a bundle is what you reach for when
-		// a plugin produces a SECOND assembled file, such as the
-		// server-side updater the custom-data-type plugins run
-		// through custom_types.<type>.update.exec.
-		Bundles []bundle `yaml:"bundles"`
-	} `yaml:"build"`
-	// Server describes the server-side delivery.
+	// ZipAliases are additional names the release zip is ALSO written
+	// under, byte-identical copies beside <repo>.zip.
+	//
+	// This exists because a published asset name can never be retired,
+	// only added to: fylr updates a url plugin by re-fetching the url it
+	// stored at install time, not by re-reading the marketplace catalog.
+	// An instance that installed while the asset had a different name
+	// holds that url forever, so dropping the name breaks its updates
+	// silently, with no way for the instance to discover the new one.
+	//
+	// So a repo whose asset name has ever changed - every plugin migrated
+	// to this tool from a hand-written Makefile, which named its zip
+	// whatever it liked - lists its historical names here and keeps
+	// publishing them.
+	ZipAliases []string `yaml:"zip_aliases"`
+	// Server describes the server-side delivery: everything that is not
+	// the webfrontend, l10n and fas_config included.
 	Server struct {
 		// Install lists the files/dirs copied verbatim into the plugin
 		// build folder (server code, fas_config, l10n, ...).
 		Install []string `yaml:"install"`
+		// Bundles are assembled server-side outputs: each is one file
+		// concatenated from an ordered list of sources, every source
+		// handled by its extension. The custom-data-type plugins build
+		// their updater this way (a hand-written Node script with a
+		// compiled CoffeeScript utility appended), geonames assembles
+		// its l10n CSV from two files.
+		Bundles []bundle `yaml:"bundles"`
 		// Go describes the Go server extensions to cross-compile. Their
 		// sources are never copied, only the built binaries ship.
 		Go struct {
@@ -108,16 +102,16 @@ type buildConfig struct {
 	} `yaml:"server"`
 	// Webfrontend describes the webfrontend delivery.
 	Webfrontend struct {
-		// Coffee1 is compiled and concatenated (in this order) into
-		// plugin.webfrontend.url under base_url_prefix. The key carries
-		// the major version: the plugins are stuck on CoffeeScript 1.x.
-		Coffee1 []string `yaml:"coffee1"`
-		// JS files join the same bundle verbatim, after the compiled
-		// CoffeeScript and in this order — for vendored libraries that
-		// are not CoffeeScript. fylr loads only the one bundle named by
-		// plugin.webfrontend.url, so a library delivered next to it
-		// (webfrontend.install) would never be loaded.
-		JS []string `yaml:"js"`
+		// Bundles are assembled webfrontend outputs, the same mechanism
+		// as server.bundles with one shorthand: an entry without "out"
+		// is written to plugin.webfrontend.url, the only bundle fylr
+		// loads — so the common case does not restate a path the
+		// manifest already owns.
+		//
+		// Sources are concatenated in the order they are written,
+		// whatever their extension: a vendored library that has to be
+		// evaluated before the code using it simply comes first.
+		Bundles []bundle `yaml:"bundles"`
 		// Scss files compile to same-named .css files ("_*.scss"
 		// partials belong here only via @use, not listed).
 		Scss []string `yaml:"scss"`
@@ -127,7 +121,28 @@ type buildConfig struct {
 		// Install lists webfrontend files delivered as-is: plain css,
 		// html, images, fonts, ...
 		Install []string `yaml:"install"`
+
+		// Coffee1 and JS are the retired pair, still parsed so an
+		// unmigrated build.yml keeps building for one release
+		// (migrateLegacy folds them into Bundles and warns). They were
+		// two lists with a fixed coffee-then-js order, which could not
+		// express a vendored library that has to be evaluated first —
+		// commons-library had already escaped into a build.bundles
+		// entry for exactly that.
+		Coffee1 []string `yaml:"coffee1"`
+		JS      []string `yaml:"js"`
 	} `yaml:"webfrontend"`
+
+	// Build is the retired wrapper: zip_aliases moved to the top level (in
+	// a file named build.yml, a build: key says nothing), and its bundles
+	// addressed any path at all, so migrateLegacy re-homes each by its out
+	// — under base_url_prefix it is a webfrontend bundle, otherwise a
+	// server one. Every JS file a plugin ships runs in one of those two
+	// places; there was never a third.
+	Build struct {
+		ZipAliases []string `yaml:"zip_aliases"`
+		Bundles    []bundle `yaml:"bundles"`
+	} `yaml:"build"`
 }
 
 type l10nJSON struct {
@@ -138,6 +153,8 @@ type l10nJSON struct {
 // bundle is one assembled output file.
 type bundle struct {
 	// Out is the file written, relative to the plugin build folder.
+	// Required for a server bundle; a webfrontend bundle may leave it
+	// empty, which means plugin.webfrontend.url under base_url_prefix.
 	Out string `yaml:"out"`
 	// Sources are concatenated in this order. The extension decides
 	// the handling: .coffee is compiled (CoffeeScript 1.x), .scss is
@@ -203,6 +220,9 @@ func loadPlugin() (*plugin, error) {
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
+	if err := p.migrateLegacy(); err != nil {
+		return nil, err
+	}
 
 	// scan line-wise so commented-out manifest blocks do not count
 	seen := map[string]bool{}
@@ -219,6 +239,118 @@ func loadPlugin() (*plugin, error) {
 	}
 	sort.Strings(p.ExecRefs)
 	return p, nil
+}
+
+// migrateLegacy folds the retired build.yml keys (#80732) into the current
+// layout and warns, so an unmigrated plugin repo keeps building for one
+// release. A file that sets both spellings is an error, not a merge — the
+// result would depend on an ordering nobody wrote down.
+func (p *plugin) migrateLegacy() error {
+	c := &p.Config
+	warn := func(format string, a ...any) {
+		fmt.Fprintf(os.Stderr, "build.yml: WARNING: "+format+"\n", a...)
+	}
+
+	if len(c.Build.ZipAliases) > 0 {
+		if len(c.ZipAliases) > 0 {
+			return fmt.Errorf("build.yml sets both zip_aliases and the retired build.zip_aliases — keep the top-level one")
+		}
+		c.ZipAliases = c.Build.ZipAliases
+		warn("build.zip_aliases is retired, use top-level zip_aliases (#80732)")
+	}
+
+	if len(c.Webfrontend.Coffee1) > 0 || len(c.Webfrontend.JS) > 0 {
+		if len(c.Webfrontend.Bundles) > 0 {
+			return fmt.Errorf("build.yml sets webfrontend.bundles together with the retired webfrontend.coffee1/js — merge them into one bundles entry")
+		}
+		// coffee-then-js is what the shorthand always produced, whatever
+		// order the two keys were written in
+		sources := append(append([]string{}, c.Webfrontend.Coffee1...), c.Webfrontend.JS...)
+		c.Webfrontend.Bundles = []bundle{{Sources: sources}}
+		warn("webfrontend.coffee1/js are retired, use one ordered webfrontend.bundles entry (#80732)")
+	}
+
+	if len(c.Build.Bundles) > 0 {
+		web, err := p.webPrefix()
+		if err != nil {
+			return err
+		}
+		for _, b := range c.Build.Bundles {
+			if web != "" && underDir(b.Out, web) {
+				c.Webfrontend.Bundles = append(c.Webfrontend.Bundles, b)
+			} else {
+				c.Server.Bundles = append(c.Server.Bundles, b)
+			}
+		}
+		warn("build.bundles is retired, use server.bundles / webfrontend.bundles (#80732)")
+	}
+	return nil
+}
+
+// underDir reports whether the build-folder-relative path is inside dir.
+func underDir(path, dir string) bool {
+	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(path))
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// bundles returns every assembled output, server first, with each out
+// resolved to a build-folder-relative path: a webfrontend entry may omit it,
+// meaning the one bundle fylr loads (plugin.webfrontend.url).
+//
+// The two lists are kept apart because the sides are not interchangeable: a
+// server bundle is a program node runs (and whose npm dependencies the build
+// resolves), a webfrontend bundle is browser code. Validation holds them to
+// their side of base_url_prefix.
+func (p *plugin) bundles() ([]bundle, error) {
+	web, err := p.webPrefix()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]bundle, 0, len(p.Config.Server.Bundles)+len(p.Config.Webfrontend.Bundles))
+	seen := map[string]bool{}
+	add := func(key string, b bundle) error {
+		switch {
+		case len(b.Sources) == 0:
+			return fmt.Errorf("build.yml: %s: %q lists no sources", key, b.Out)
+		case filepath.IsAbs(b.Out) || strings.HasPrefix(filepath.Clean(b.Out), ".."):
+			return fmt.Errorf("build.yml: %s: out %q must be inside the plugin folder", key, b.Out)
+		case seen[filepath.Clean(b.Out)]:
+			return fmt.Errorf("build.yml: %q is written by two bundles", b.Out)
+		}
+		seen[filepath.Clean(b.Out)] = true
+		out = append(out, b)
+		return nil
+	}
+
+	for _, b := range p.Config.Server.Bundles {
+		if b.Out == "" {
+			return nil, fmt.Errorf("build.yml: server.bundles: an entry has no out")
+		}
+		if web != "" && underDir(b.Out, web) {
+			return nil, fmt.Errorf("build.yml: server.bundles: out %q is inside base_url_prefix %q — that is a webfrontend bundle", b.Out, web)
+		}
+		if err := add("server.bundles", b); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, b := range p.Config.Webfrontend.Bundles {
+		if b.Out == "" {
+			if web == "" {
+				return nil, fmt.Errorf("build.yml lists webfrontend.bundles but manifest.yml has no webfrontend — set plugin.webfrontend.url and base_url_prefix")
+			}
+			if p.Manifest.Plugin.Webfrontend.URL == "" {
+				return nil, fmt.Errorf("build.yml: webfrontend.bundles: an entry has no out and manifest.yml plugin.webfrontend.url is empty — one of the two has to name the file")
+			}
+			b.Out = filepath.Join(web, p.Manifest.Plugin.Webfrontend.URL)
+		} else if web != "" && !underDir(b.Out, web) {
+			return nil, fmt.Errorf("build.yml: webfrontend.bundles: out %q is outside base_url_prefix %q — that is a server bundle", b.Out, web)
+		}
+		if err := add("webfrontend.bundles", b); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // webPrefix returns the webfrontend dir (source dir == served base_url_prefix

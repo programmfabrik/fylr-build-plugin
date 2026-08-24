@@ -74,7 +74,7 @@ func build(p *plugin, release string) error {
 		}
 	}
 
-	if err := buildWebfrontend(p); err != nil {
+	if err := buildScss(p); err != nil {
 		return err
 	}
 	// after install, so a bundle may overwrite a file that was copied in
@@ -208,15 +208,12 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	return out.Close()
 }
 
-// buildWebfrontend compiles the build.yml webfrontend sources: CoffeeScript
-// and plain JS (in list order) into the manifest's bundle, SCSS into
-// same-named CSS files. Plain webfrontend artifacts ship via
-// webfrontend.install.
-func buildWebfrontend(p *plugin) error {
-	coffees := p.Config.Webfrontend.Coffee1
-	jsFiles := p.Config.Webfrontend.JS
+// buildScss compiles webfrontend.scss to same-named .css files under
+// base_url_prefix. Plain webfrontend artifacts ship via webfrontend.install,
+// assembled ones via webfrontend.bundles.
+func buildScss(p *plugin) error {
 	scssFiles := p.Config.Webfrontend.Scss
-	if len(coffees) == 0 && len(jsFiles) == 0 && len(scssFiles) == 0 {
+	if len(scssFiles) == 0 {
 		return nil
 	}
 	web, err := p.webPrefix()
@@ -226,49 +223,24 @@ func buildWebfrontend(p *plugin) error {
 	if web == "" {
 		return fmt.Errorf("build.yml has webfrontend sources but manifest.yml base_url_prefix is empty — set base_url_prefix: webfrontend")
 	}
+	if err := needTool("sass", "npm install -g sass"); err != nil {
+		return err
+	}
 	dst := filepath.Join(p.Dir(), web)
-
-	// compiled CoffeeScript + verbatim JS -> one bundle, named by the manifest
-	if len(coffees) > 0 || len(jsFiles) > 0 {
-		if p.Manifest.Plugin.Webfrontend.URL == "" {
-			return fmt.Errorf("build.yml lists %d webfrontend bundle source(s) but manifest.yml plugin.webfrontend.url is empty", len(coffees)+len(jsFiles))
+	for _, sf := range scssFiles {
+		rel, err := filepath.Rel(web, sf)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			return fmt.Errorf("scss file %q is not inside the webfrontend dir %q", sf, web)
 		}
-		// coffee1 then js is the shorthand's fixed order; build.bundles
-		// takes the sources in the order they are written
-		content, err := assemble(append(append([]string{}, coffees...), jsFiles...))
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, p.Manifest.Plugin.Webfrontend.URL)
+		target := filepath.Join(dst, strings.TrimSuffix(rel, ".scss")+".css")
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(target, content, 0o644); err != nil {
-			return err
+		if _, err := runCmd("", "sass", "--no-source-map", sf, target); err != nil {
+			return fmt.Errorf("compiling %s: %w", sf, err)
 		}
-		fmt.Printf("bundle: %d coffee + %d js file(s) -> %s\n", len(coffees), len(jsFiles), target)
 	}
-
-	// SCSS -> same-named .css
-	if len(scssFiles) > 0 {
-		if err := needTool("sass", "npm install -g sass"); err != nil {
-			return err
-		}
-		for _, sf := range scssFiles {
-			rel, err := filepath.Rel(web, sf)
-			if err != nil || strings.HasPrefix(rel, "..") {
-				return fmt.Errorf("scss file %q is not inside the webfrontend dir %q", sf, web)
-			}
-			target := filepath.Join(dst, strings.TrimSuffix(rel, ".scss")+".css")
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-				return err
-			}
-			if _, err := runCmd("", "sass", "--no-source-map", sf, target); err != nil {
-				return fmt.Errorf("compiling %s: %w", sf, err)
-			}
-		}
-		fmt.Printf("sass: %d file(s) compiled\n", len(scssFiles))
-	}
+	fmt.Printf("sass: %d file(s) compiled\n", len(scssFiles))
 	return nil
 }
 
@@ -325,30 +297,17 @@ func assemble(sources []string) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
-// buildBundles writes every build.bundles entry: one assembled file each,
-// anywhere in the plugin folder. This is what lets a plugin produce a SECOND
-// assembled output beside the webfrontend bundle — the custom-data-type
-// plugins build a server-side updater that way, a hand-written Node script
-// with a compiled CoffeeScript utility appended.
+// buildBundles writes every server.bundles and webfrontend.bundles entry: one
+// assembled file each. The webfrontend bundle fylr loads is the common case
+// (its out comes from the manifest); the custom-data-type plugins assemble a
+// server-side updater the same way, a hand-written Node script with a compiled
+// CoffeeScript utility appended.
 func buildBundles(p *plugin) error {
-	bundles := p.Config.Build.Bundles
-	if len(bundles) == 0 {
-		return nil
+	bundles, err := p.bundles()
+	if err != nil {
+		return err
 	}
-	seen := map[string]bool{}
 	for _, b := range bundles {
-		switch {
-		case b.Out == "":
-			return fmt.Errorf("build.bundles: an entry has no out")
-		case len(b.Sources) == 0:
-			return fmt.Errorf("build.bundles: %q lists no sources", b.Out)
-		case filepath.IsAbs(b.Out) || strings.HasPrefix(filepath.Clean(b.Out), ".."):
-			return fmt.Errorf("build.bundles: out %q must be inside the plugin folder", b.Out)
-		case seen[filepath.Clean(b.Out)]:
-			return fmt.Errorf("build.bundles: %q is written by two entries", b.Out)
-		}
-		seen[filepath.Clean(b.Out)] = true
-
 		content, err := assemble(b.Sources)
 		if err != nil {
 			return err
