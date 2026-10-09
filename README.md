@@ -131,7 +131,8 @@ it, so an installed plugin is traceable to a commit and release.
 All commands run from the plugin repo root (where `manifest.yml` lives).
 External tools are checked per step with an actionable error: `coffee` is only
 required when the plugin has CoffeeScript, `sass` only for SCSS, `go` only for
-Go server extensions.
+Go server extensions, [`uv`](https://docs.astral.sh/uv/) only for Python
+packages.
 
 The tool reads **no environment variables** — every input is a flag. Where a
 release workflow has a value in env (`RELEASE_TAG`), the plugin's Makefile
@@ -195,6 +196,37 @@ missing-module test callbacks).
   commit `package-lock.json`, and the build runs `npm ci` when needed.
   `node_modules` never ships, so this is what makes a dependency work at all;
   a program that requires nothing is delivered byte-for-byte as written.
+- Python packages of the plugin's **python3 programs** are listed in
+  `build.yml`, per folder:
+
+  ```yaml
+  server:
+    python:
+      - dir: server/extension/python_dep   # delivered by server.install
+        packages:                          # as pip takes them, "trimesh>=4" too
+          - python-slugify
+          - trimesh
+  ```
+
+  The build resolves them with `uv` for the fylr image — Python 3.14 on
+  Linux, whatever machine builds, so a dependency behind a marker like
+  `python_version >= "3.13"` is decided the way it is on the instance — and
+  installs every resolved package, dependencies included, into that folder of
+  the build tree. Python looks into a program's own folder first, so the
+  programs there `import` them without any setup; a program in another folder
+  does not see them. Nothing runs pip on an instance or an execserver: the
+  packages travel in the zip, with their `.dist-info`, which records the
+  version that shipped.
+
+  Only **pure-Python** packages ship. A compiled one is built for one Python
+  and one platform, and the image's Python moves with Debian, so compiled
+  packages come from the fylr image, which installs them explicitly:
+  `numpy` and `opencv-python`. They are resolved capped at the version the
+  image has, so a dependency that needs a newer one fails the build, and any
+  other compiled package fails it too — it has to be added to the fylr image
+  first. A fylr outside the image (a developer's own) runs the programs with
+  its own `python3`, which then needs a version the packages accept
+  (`Requires-Python`) and those compiled packages installed.
 - `server.go.modules` cross-compile for every configured arch (CGO off,
   trimmed, stripped) into their `exe` template — `%GOOS%`/`%GOARCH%` replaced,
   matching the manifest's `%_exec.GOOS%`/`%_exec.GOARCH%` references. Go

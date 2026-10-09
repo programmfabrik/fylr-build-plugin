@@ -87,6 +87,11 @@ func build(p *plugin, release string) error {
 	if err := buildNodeDeps(p); err != nil {
 		return err
 	}
+	// after install: the packages go into folders server.install delivered,
+	// next to the programs that import them
+	if err := buildPythonDeps(p); err != nil {
+		return err
+	}
 	if err := buildReadme(p); err != nil {
 		return err
 	}

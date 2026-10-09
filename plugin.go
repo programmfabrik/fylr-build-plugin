@@ -99,6 +99,10 @@ type buildConfig struct {
 			// Modules lists the Go modules and their output paths.
 			Modules []goExe `yaml:"modules"`
 		} `yaml:"go"`
+		// Python lists the packages the plugin's python3 programs import,
+		// per folder. The build resolves them for the fylr image and
+		// delivers them with all their dependencies into that folder.
+		Python []pythonDeps `yaml:"python"`
 	} `yaml:"server"`
 	// Webfrontend describes the webfrontend delivery.
 	Webfrontend struct {
@@ -173,6 +177,16 @@ type locaSheet struct {
 type goExe struct {
 	Dir string `yaml:"dir"` // module directory, repo-relative
 	Exe string `yaml:"exe"` // output template, e.g. go/hello-%GOOS%-%GOARCH%.exe
+}
+
+// pythonDeps is one folder of python3 programs and the packages they import.
+type pythonDeps struct {
+	// Dir is the folder, repo-relative and delivered by server.install;
+	// the packages land in it, next to the programs.
+	Dir string `yaml:"dir"`
+	// Packages are requirements as pip takes them ("trimesh",
+	// "python-slugify>=8"). Their dependencies are resolved, not listed.
+	Packages []string `yaml:"packages"`
 }
 
 // plugin is the resolved build model: manifest + build.yml + derived facts.

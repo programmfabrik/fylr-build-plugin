@@ -22,6 +22,13 @@ webfrontend:
 # package-lock.json, and the build resolves every require of a node program the
 # manifest runs into the delivered file (node_modules never ships).
 
+# Python packages of python3 programs are listed per folder under server; the
+# build delivers them with all their dependencies into that folder (needs uv):
+#   python:
+#     - dir: server/<folder of the programs>
+#       packages:
+#         - <package>
+
 # Once the plugin's loca gets a tab in the "fylr localization" Google Sheet,
 # configure it here and pull with "make loca":
 # loca:
