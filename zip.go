@@ -41,7 +41,11 @@ func runZip(args []string) error {
 	if err := build(p, *release); err != nil {
 		return err
 	}
-	return zipPlugin(p)
+	if err := zipPlugin(p); err != nil {
+		return err
+	}
+	warnWithoutNotify()
+	return nil
 }
 
 // zipName is the one naming rule for fylr plugin releases: the zip is named

@@ -127,6 +127,7 @@ it, so an installed plugin is traceable to a commit and release.
 | `readme` | write a self-contained README (relative images inlined) |
 | `check` | validate the build tree against the manifest |
 | `clean` | remove the build folder |
+| `notify-release` | tell the marketplace catalog about a published release |
 
 All commands run from the plugin repo root (where `manifest.yml` lives).
 External tools are checked per step with an actionable error: `coffee` is only
@@ -136,7 +137,8 @@ packages.
 
 The tool reads **no environment variables** — every input is a flag. Where a
 release workflow has a value in env (`RELEASE_TAG`), the plugin's Makefile
-shim translates it into the `-release` flag.
+shim translates it into the `-release` flag. The one exception is the token of
+`notify-release`, `GH_TOKEN`: a secret must not show in the process list.
 
 ### How the release zip is named
 
@@ -410,6 +412,18 @@ and publishes the artifact. Two templates live in [templates/](./templates):
 
 Either variant becomes a *sealed* release by switching `make zip` to
 `make seal` — no secrets needed.
+
+Both end with a `marketplace` job: once the zip is reachable, it runs
+`fylr-build-plugin notify-release`, which sends the repository dispatch
+`plugin-released` to this repository. Its
+[marketplace-releases](./.github/workflows/marketplace_releases.yml) workflow
+then writes the plugin's latest release (tag, date, sha256) into the fylr
+Plugin Marketplace catalog, so instances limited to marketplace plugins follow
+the release within minutes. The same workflow runs every 6 hours for all
+plugins and catches releases whose workflow does not notify; `zip` and `seal`
+warn about such a workflow. The token is the organization secret
+`FYLR_BOT_PERSONAL_ACCESS_TOKEN`; outside the programmfabrik organization it is
+empty, and `notify-release` only prints a notice.
 
 ## `readme`
 

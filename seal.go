@@ -75,6 +75,7 @@ func runSeal(args []string) error {
 	}
 	fmt.Printf("sealed %s -> %s (%d bytes, a valid zip; recipient %s)\n",
 		inPath, outPath, len(sealed), base64.StdEncoding.EncodeToString(pub[:]))
+	warnWithoutNotify()
 	return nil
 }
 

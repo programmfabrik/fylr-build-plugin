@@ -46,6 +46,8 @@ func main() {
 		err = runCheck(args[1:])
 	case "clean":
 		err = runClean(args[1:])
+	case "notify-release":
+		err = runNotifyRelease(args[1:])
 	case "-h", "--help", "help":
 		usage(os.Stdout)
 	default:
@@ -75,6 +77,8 @@ Usage:
   fylr-build-plugin readme   write a self-contained README (images inlined)
   fylr-build-plugin check    validate the build tree against the manifest
   fylr-build-plugin clean    remove the build folder
+  fylr-build-plugin notify-release
+                             tell the marketplace catalog about a published release
 
 Run "fylr-build-plugin <command> -h" for the command's flags.
 `)

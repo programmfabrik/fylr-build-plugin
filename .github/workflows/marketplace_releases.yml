@@ -1,0 +1,70 @@
+name: marketplace-releases
+# Keeps the release columns (tag, date, sha256) of the fylr Plugin
+# Marketplace catalog, and of the "fylr plugins" tab it is built from, current
+# with the plugins' latest releases, so instances with fylr.plugin.sources
+# "marketplace" follow new releases. Writes only those cells: no row is added
+# or removed. The tooling is fylr's utils/plugins_sheet.py.
+#
+# A plugin's release workflow runs "fylr-build-plugin notify-release" (see
+# templates/release-*.yaml), which dispatches plugin-released here with the
+# repository in client_payload: that run updates just this plugin. The
+# schedule catches releases of plugins whose workflow does not notify yet.
+#
+# This repository is public, and so are its logs: the update prints counts,
+# never plugin names, tags or sheet keys.
+on:
+  schedule:
+  # This is UTC time
+  - cron: "17 */6 * * *"
+  workflow_dispatch:
+  repository_dispatch:
+    types: [plugin-released]
+
+concurrency:
+  group: marketplace-releases
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  releases:
+    name: update the catalog release columns
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout the catalog tooling from fylr
+      uses: actions/checkout@v6
+      with:
+        repository: programmfabrik/fylr
+        ref: main
+        # fylr is private
+        token: ${{ secrets.FYLR_BOT_PERSONAL_ACCESS_TOKEN }}
+        sparse-checkout: |
+          /Makefile
+          /utils/plugins_sheet.py
+        sparse-checkout-cone-mode: false
+    - name: python venv with gspread
+      run: |
+        python3 -m venv "$RUNNER_TEMP/venv"
+        "$RUNNER_TEMP/venv/bin/pip" install --quiet gspread pyyaml
+    - name: write the release columns
+      env:
+        # reads the releases of the org's plugin repos, private ones included
+        GH_TOKEN: ${{ secrets.FYLR_BOT_PERSONAL_ACCESS_TOKEN }}
+        SHEETS_SA_KEY: ${{ secrets.MARKETPLACE_SHEETS_SA_KEY }}
+        PLUGIN_REPO: ${{ github.event.client_payload.repo }}
+      run: |
+        flags="--quiet"
+        if [ -n "$PLUGIN_REPO" ]; then
+          case "$PLUGIN_REPO" in
+            *[!A-Za-z0-9._-]*) echo "::error::client_payload.repo is not a repository name"; exit 1 ;;
+          esac
+          flags="$flags --repo $PLUGIN_REPO"
+        fi
+        key="$RUNNER_TEMP/sheets-sa.json"
+        umask 077
+        printf '%s' "$SHEETS_SA_KEY" > "$key"
+        # -s: the recipe line names the sheet keys
+        make -s google-marketplace-releases MARKETPLACE_PYTHON="$RUNNER_TEMP/venv/bin/python" \
+          GOOGLE_SA_KEY="$key" MARKETPLACE_RELEASES_FLAGS="$flags"
+        rm -f "$key"
