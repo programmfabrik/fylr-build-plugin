@@ -410,6 +410,12 @@ and publishes the artifact. Two templates live in [templates/](./templates):
   publish to GitHub Pages under an unguessable per-repo UUID URL, since a
   private repo's release assets are not fetchable by fylr.
 
+Both also publish the newest published release, prerelease or not, on GitHub
+Pages as `<repo>-prerelease.zip` (private: `<repo>-<UUID>-prerelease.zip`),
+since `releases/latest` skips prereleases. That is the "plugin prerelease url"
+of the plugins sheet, for developers testing a prerelease; the marketplace
+never uses it. Repo setting: Pages > Source = GitHub Actions.
+
 Either variant becomes a *sealed* release by switching `make zip` to
 `make seal` — no secrets needed.
 
