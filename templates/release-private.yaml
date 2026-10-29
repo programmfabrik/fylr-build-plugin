@@ -11,7 +11,9 @@
 # always serves the latest real release. -prerelease.zip serves the newest
 # published release, prerelease or not: developers install it to test a
 # prerelease (the "plugin prerelease url" column of the plugins sheet).
-# Repo settings: Pages > Source = GitHub Actions.
+# Repo settings: Pages > Source = GitHub Actions, and Environments >
+# github-pages needs the deployment tag rule v*.*.* (Pages creates it allowing
+# the default branch only).
 #
 # Sealed plugin? Replace "make zip" with "make seal" and ship
 # build/<repo>_sealed.zip — a leaked URL then still yields nothing without

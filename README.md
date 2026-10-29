@@ -414,7 +414,16 @@ Both also publish the newest published release, prerelease or not, on GitHub
 Pages as `<repo>-prerelease.zip` (private: `<repo>-<UUID>-prerelease.zip`),
 since `releases/latest` skips prereleases. That is the "plugin prerelease url"
 of the plugins sheet, for developers testing a prerelease; the marketplace
-never uses it. Repo setting: Pages > Source = GitHub Actions.
+never uses it. Repo settings: Pages > Source = GitHub Actions, and in
+Environments > github-pages a deployment tag rule `v*.*.*`. Turning Pages on
+creates that environment with the default branch as its only rule, so the
+deploy of a release tag is refused until the tag rule exists:
+
+```sh
+gh api -X POST repos/<org>/<repo>/pages -f build_type=workflow
+gh api -X POST repos/<org>/<repo>/environments/github-pages/deployment-branch-policies \
+  -f name='v*.*.*' -f type=tag
+```
 
 Either variant becomes a *sealed* release by switching `make zip` to
 `make seal` — no secrets needed.
